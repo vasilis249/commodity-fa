@@ -102,6 +102,55 @@ def analyze(
 
 
 @app.command()
+def forecast(
+    symbol: str,
+    models: Annotated[
+        str | None, typer.Option("--models", help="Comma-separated subset, e.g. naive,lightgbm.")
+    ] = None,
+    folds: Annotated[int | None, typer.Option("--folds", help="Override max folds.")] = None,
+    as_of: Annotated[
+        str | None, typer.Option("--as-of", help="Forecast origin YYYY-MM-DD (point in time).")
+    ] = None,
+    offline: Annotated[bool, typer.Option("--offline", help="Use cached data only.")] = False,
+    refresh: Annotated[
+        bool, typer.Option("--refresh", help="Re-run the walk-forward evaluation.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the report as JSON.")] = False,
+    config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR,
+) -> None:
+    """Probabilistic 1/5/20-day forecast with the models' measured out-of-sample skill."""
+    from datetime import date
+
+    from fa.data.http import DataUnavailable
+    from fa.data.service import DataService
+    from fa.forecasting.service import run_forecast
+    from fa.reports.forecast_text import render
+
+    cfg = _load_or_exit(config_dir)
+    if folds:
+        wf = cfg.forecasting.walk_forward.model_copy(update={"max_folds": folds})
+        fc = cfg.forecasting.model_copy(update={"walk_forward": wf})
+        cfg = cfg.model_copy(update={"forecasting": fc})
+    wanted = [m.strip() for m in models.split(",")] if models else None
+    if not as_json:
+        typer.secho(
+            "Running walk-forward evaluation (cached after the first run)...", dim=True, err=True
+        )
+    try:
+        report = run_forecast(
+            DataService(cfg, offline=offline),
+            symbol,
+            models=wanted,
+            as_of=date.fromisoformat(as_of) if as_of else None,
+            refresh=refresh,
+        )
+    except (DataUnavailable, ValueError) as exc:
+        typer.secho(f"Forecast unavailable: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(report.model_dump_json(indent=2) if as_json else render(report))
+
+
+@app.command()
 def universe(config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR) -> None:
     """List the configured instruments."""
     cfg = _load_or_exit(config_dir)

@@ -6,21 +6,50 @@ interval_coverage_target: 0.8
 
 walk_forward:
   min_train_days: 756           # ~3 years before the first forecast
-  step_days: 20                 # refit cadence
+  step_days: 20                 # refit cadence (= test block length)
   purge_days: 20                # >= max horizon, so overlapping labels never leak
-  embargo_days: 5
-  max_folds: 40
+  embargo_days: 5               # extra gap between the last training label and the test block
+  max_folds: 30                 # most recent folds evaluated
+  eval_stride: 5                # forecast origins every N sessions inside a test block
+  refit_every: 3                # refit models every N folds; between refits the latest fit
+                                # (trained on older data only) is applied to newer data
 
 models:                         # the ladder, cheapest first
-  naive: {enabled: true}
-  drift: {enabled: true}
+  naive: {enabled: true}        # random walk: zero drift, empirical spread
+  drift: {enabled: true}        # random walk with trailing drift
   auto_arima: {enabled: true}
   auto_ets: {enabled: true}
   lightgbm: {enabled: true}
   chronos2: {enabled: false}    # needs `uv sync --extra foundation`
   timesfm: {enabled: false}     # latest weights are NON-COMMERCIAL licensed; opt-in only
-  ensemble: {enabled: true}     # weights learned on validation folds only
+  ensemble: {enabled: true}     # weights learned on earlier validation folds only
+
+baselines:
+  lookback_days: 756            # trailing window for empirical return quantiles
+  min_days: 252
+
+lightgbm:
+  n_estimators: 300
+  learning_rate: 0.03
+  num_leaves: 15
+  min_child_samples: 50
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_lambda: 1.0
+  seed: 42
+  num_threads: 4                # deterministic for a fixed thread count
+
+chronos2:
+  model_id: amazon/chronos-2
+  context_length: 512
+  device: cpu
+
+ensemble:
+  min_folds: 3                  # earlier folds needed before weights are learned (else equal)
+  window_folds: 8               # weights from the most recent N earlier folds
 
 skill:
   baseline: naive               # a model claims skill only if it beats this out-of-sample
-  significance_alpha: 0.05      # binomial test for directional accuracy
+  significance_alpha: 0.05      # Diebold-Mariano (pinball loss) and binomial (direction) tests
+
+leaderboard_dir: leaderboards   # relative to the repo root; git-ignored

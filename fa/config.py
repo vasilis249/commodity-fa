@@ -195,6 +195,8 @@ class WalkForward(_Strict):
     purge_days: int = Field(ge=0)
     embargo_days: int = Field(ge=0)
     max_folds: int = Field(gt=0)
+    eval_stride: int = Field(gt=0)
+    refit_every: int = Field(ge=1)  # folds between refits; in between, the last fit is reused
 
 
 class ModelToggle(_Strict):
@@ -206,6 +208,34 @@ class Skill(_Strict):
     significance_alpha: float = Field(gt=0, lt=1)
 
 
+class BaselineSettings(_Strict):
+    lookback_days: int = Field(gt=0)
+    min_days: int = Field(gt=0)
+
+
+class LightGBMSettings(_Strict):
+    n_estimators: int = Field(gt=0)
+    learning_rate: float = Field(gt=0)
+    num_leaves: int = Field(gt=1)
+    min_child_samples: int = Field(gt=0)
+    subsample: float = Field(gt=0, le=1)
+    colsample_bytree: float = Field(gt=0, le=1)
+    reg_lambda: float = Field(ge=0)
+    seed: int
+    num_threads: int = Field(ge=1)  # results are deterministic for a fixed thread count
+
+
+class ChronosSettings(_Strict):
+    model_id: str
+    context_length: int = Field(gt=16)
+    device: str
+
+
+class EnsembleSettings(_Strict):
+    min_folds: int = Field(ge=1)
+    window_folds: int = Field(ge=1)
+
+
 class ForecastingConfig(_Strict):
     target: Literal["log_return"]
     horizons: list[int]
@@ -213,7 +243,12 @@ class ForecastingConfig(_Strict):
     interval_coverage_target: float = Field(gt=0, lt=1)
     walk_forward: WalkForward
     models: dict[str, ModelToggle]
+    baselines: BaselineSettings
+    lightgbm: LightGBMSettings
+    chronos2: ChronosSettings
+    ensemble: EnsembleSettings
     skill: Skill
+    leaderboard_dir: Path
 
     @field_validator("horizons")
     @classmethod
@@ -234,6 +269,8 @@ class ForecastingConfig(_Strict):
         # Labels overlap up to the longest horizon; a shorter purge leaks future returns.
         if self.walk_forward.purge_days < max(self.horizons):
             raise ValueError("walk_forward.purge_days must be >= the longest horizon")
+        if 0.5 not in self.quantiles:
+            raise ValueError("quantiles must include the median (0.5)")
         if self.skill.baseline not in self.models:
             raise ValueError(f"skill.baseline '{self.skill.baseline}' is not in models")
         return self
