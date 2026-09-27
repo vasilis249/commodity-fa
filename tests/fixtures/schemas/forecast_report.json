@@ -1,0 +1,436 @@
+{
+  "$defs": {
+    "Band": {
+      "properties": {
+        "log_return": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Log Return"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "quantile": {
+          "title": "Quantile",
+          "type": "number"
+        }
+      },
+      "required": [
+        "quantile",
+        "log_return",
+        "price"
+      ],
+      "title": "Band",
+      "type": "object"
+    },
+    "HorizonForecast": {
+      "properties": {
+        "all_models": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "title": "All Models",
+          "type": "object"
+        },
+        "bands": {
+          "items": {
+            "$ref": "#/$defs/Band"
+          },
+          "title": "Bands",
+          "type": "array"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "integer"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "p_up": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Up"
+        },
+        "skill": {
+          "$ref": "#/$defs/SkillLine"
+        }
+      },
+      "required": [
+        "horizon",
+        "model",
+        "bands",
+        "p_up",
+        "skill",
+        "all_models"
+      ],
+      "title": "HorizonForecast",
+      "type": "object"
+    },
+    "LeaderRow": {
+      "properties": {
+        "brier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Brier"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "dir_acc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir Acc"
+        },
+        "dir_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir P"
+        },
+        "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P"
+        },
+        "dm_p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P Adj"
+        },
+        "edge": {
+          "title": "Edge",
+          "type": "boolean"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "integer"
+        },
+        "mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mae"
+        },
+        "mase": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mase"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_independent": {
+          "title": "N Independent",
+          "type": "integer"
+        },
+        "pinball": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pinball"
+        },
+        "skill": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Skill"
+        }
+      },
+      "required": [
+        "model",
+        "horizon",
+        "n",
+        "n_independent",
+        "mae",
+        "mase",
+        "pinball",
+        "skill",
+        "coverage",
+        "dir_acc",
+        "dir_p",
+        "brier",
+        "dm_p",
+        "dm_p_adj",
+        "edge"
+      ],
+      "title": "LeaderRow",
+      "type": "object"
+    },
+    "SkillLine": {
+      "properties": {
+        "coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "dir_acc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir Acc"
+        },
+        "dir_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir P"
+        },
+        "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P"
+        },
+        "dm_p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P Adj"
+        },
+        "edge": {
+          "title": "Edge",
+          "type": "boolean"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "skill_vs_naive": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Skill Vs Naive"
+        },
+        "verdict": {
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "skill_vs_naive",
+        "coverage",
+        "dir_acc",
+        "dir_p",
+        "dm_p",
+        "dm_p_adj",
+        "edge",
+        "verdict"
+      ],
+      "title": "SkillLine",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+    },
+    "disclaimer": {
+      "default": "Research output, paper trading only. Not investment advice.",
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "eval_end": {
+      "format": "date",
+      "title": "Eval End",
+      "type": "string"
+    },
+    "eval_start": {
+      "format": "date",
+      "title": "Eval Start",
+      "type": "string"
+    },
+    "folds": {
+      "title": "Folds",
+      "type": "integer"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "horizons": {
+      "items": {
+        "$ref": "#/$defs/HorizonForecast"
+      },
+      "title": "Horizons",
+      "type": "array"
+    },
+    "last_close": {
+      "title": "Last Close",
+      "type": "number"
+    },
+    "leaderboard": {
+      "items": {
+        "$ref": "#/$defs/LeaderRow"
+      },
+      "title": "Leaderboard",
+      "type": "array"
+    },
+    "models": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "as_of",
+    "last_close",
+    "unit",
+    "horizons",
+    "leaderboard",
+    "eval_start",
+    "eval_end",
+    "folds",
+    "models",
+    "notes",
+    "generated_at"
+  ],
+  "title": "ForecastReport",
+  "type": "object"
+}

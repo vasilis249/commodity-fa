@@ -60,3 +60,26 @@ class Synthesis(_Out):
     bull_case: str
     bear_case: str
     risks: str
+
+
+class ResearchAnswer(_Out):
+    """One question, answered from tool results (plan -> act -> answer; code validates)."""
+
+    plan: list[str] = Field(
+        description="1-4 short steps: which tools you will call and why (no numbers)"
+    )
+    answerable: bool = Field(
+        description="False if the tools cannot answer it (missing data, future dates, "
+        "out of scope); then leave value and choice null"
+    )
+    value: float | None = Field(
+        description="The single number that answers the question, copied from a cited "
+        "tool result (fractions as given, e.g. 0.074), or null"
+    )
+    unit: str | None = Field(description="Unit of value, e.g. 'USD/bbl', 'fraction', 'contracts'")
+    choice: str | None = Field(
+        description="For yes/no or category questions: the answer word (e.g. 'yes', "
+        "'backwardation', 'uptrend'), otherwise null"
+    )
+    answer: str = Field(description="1-3 sentences answering the question, citing [T#]")
+    citations: list[str] = Field(description="Result ids that support the answer, e.g. ['T2']")

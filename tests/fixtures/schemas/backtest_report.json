@@ -1,0 +1,279 @@
+{
+  "$defs": {
+    "Metrics": {
+      "properties": {
+        "cagr": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cagr"
+        },
+        "calmar": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calmar"
+        },
+        "costs_paid": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Costs Paid"
+        },
+        "days": {
+          "title": "Days",
+          "type": "integer"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        },
+        "exposure": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exposure"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hit Rate"
+        },
+        "max_drawdown": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Drawdown"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sharpe": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe"
+        },
+        "sharpe_ci95": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe Ci95"
+        },
+        "sortino": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sortino"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "total_return": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Return"
+        },
+        "trades": {
+          "title": "Trades",
+          "type": "integer"
+        },
+        "turnover": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Turnover"
+        },
+        "vol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vol"
+        }
+      },
+      "required": [
+        "name",
+        "start",
+        "end",
+        "days",
+        "total_return",
+        "cagr",
+        "vol",
+        "sharpe",
+        "sharpe_ci95",
+        "sortino",
+        "max_drawdown",
+        "calmar",
+        "hit_rate",
+        "turnover",
+        "exposure",
+        "trades",
+        "costs_paid"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "benchmark_metrics": {
+      "$ref": "#/$defs/Metrics"
+    },
+    "disclaimer": {
+      "default": "Paper backtest for research only. Past simulated results are not investment advice.",
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "edge_p_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Edge P Value"
+    },
+    "excess": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Excess",
+      "type": "object"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "results_file": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Results File"
+    },
+    "strategy": {
+      "title": "Strategy",
+      "type": "string"
+    },
+    "strategy_metrics": {
+      "$ref": "#/$defs/Metrics"
+    },
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "strategy",
+    "params",
+    "strategy_metrics",
+    "benchmark_metrics",
+    "excess",
+    "edge_p_value",
+    "notes",
+    "generated_at"
+  ],
+  "title": "BacktestReport",
+  "type": "object"
+}

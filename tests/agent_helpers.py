@@ -110,6 +110,9 @@ class FakeLLM:
     flag_stance: set[str] = field(default_factory=set)  # validator rejects their stance
     reject_format: bool = False
     stance: str = "bullish"
+    # research_agent: which tools it calls, and how it answers
+    research_tools: tuple[str, ...] = ("price_technicals",)
+    research_mode: str = "honest"  # honest | lie_once | lie_always | decline
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     _flagged: set[str] = field(default_factory=set)
 
@@ -124,6 +127,8 @@ class FakeLLM:
             return _resp("refusal", [])
         messages = params["messages"]
         tools = [t["name"] for t in params.get("tools", [])]
+        if agent == "research_agent":
+            tools = [t for t in self.research_tools if t in tools]
         if (
             tools
             and not _results_in(messages)
@@ -164,7 +169,37 @@ class FakeLLM:
             return ["Price is 12345.67 [T1]."]
         return []
 
+    def _research(self, messages: list[dict[str, Any]], feedback: bool) -> dict[str, Any]:
+        results = _results_in(messages)
+        hit = next((h for p in results if (h := _first_number(p))), None)
+        rid = next((p["result_id"] for p in results if _first_number(p)), None)
+        if self.research_mode == "decline" or hit is None:
+            return {
+                "plan": ["check the tools"],
+                "answerable": False,
+                "value": None,
+                "unit": None,
+                "choice": None,
+                "answer": "The tools cannot answer this.",
+                "citations": [],
+            }
+        lie = self.research_mode == "lie_always" or (
+            self.research_mode == "lie_once" and not feedback
+        )
+        value = 12345.67 if lie else hit[1]
+        return {
+            "plan": ["read the price tool"],
+            "answerable": True,
+            "value": value,
+            "unit": "USD/bbl",
+            "choice": None,
+            "answer": f"The {hit[0]} reading is {value!r} [{rid}].",
+            "citations": [rid],
+        }
+
     def _answer(self, agent: str, messages: list[dict[str, Any]], feedback: bool) -> dict[str, Any]:
+        if agent == "research_agent":
+            return self._research(messages, feedback)
         ev = self._evidence(messages) + self._lie(agent, feedback)
         if agent == "validator":
             issues = []

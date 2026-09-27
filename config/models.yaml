@@ -24,10 +24,13 @@ agent_roles:
   risk_reviewer: risk_reviewer
   validator: validator
   synthesizer: synthesizer
+  research_agent: analyst
 
 budget:
   max_usd_per_run: 1.00         # hard cap: the pipeline aborts cleanly when exceeded
   max_usd_backtest: 5.00        # LLM-agent backtests warn before exceeding this estimate
+  max_usd_eval: 5.00            # hard cap for one `fa eval` run over all questions
+  est_usd_per_question: 0.06    # used to warn before an eval run; the cap above is enforced
   max_tokens_per_run: 400000
   preflight_output_fraction: 0.35  # pre-call estimate assumes this share of max_tokens is used
 

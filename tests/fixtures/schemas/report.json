@@ -1,0 +1,689 @@
+{
+  "$defs": {
+    "AnalystView": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "description": "How strongly the evidence supports the stance",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "data_gaps": {
+          "description": "Data you needed but that was unavailable",
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Gaps",
+          "type": "array"
+        },
+        "key_points": {
+          "description": "3-6 evidence statements, each citing [T#]",
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Points",
+          "type": "array"
+        },
+        "red_flags": {
+          "description": "Evidence against your stance or data problems",
+          "items": {
+            "type": "string"
+          },
+          "title": "Red Flags",
+          "type": "array"
+        },
+        "stance": {
+          "enum": [
+            "bullish",
+            "bearish",
+            "neutral"
+          ],
+          "title": "Stance",
+          "type": "string"
+        },
+        "summary": {
+          "description": "2-4 sentences; every number cited like [T3]",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stance",
+        "confidence",
+        "summary",
+        "key_points",
+        "red_flags",
+        "data_gaps"
+      ],
+      "title": "AnalystView",
+      "type": "object"
+    },
+    "Band": {
+      "properties": {
+        "log_return": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Log Return"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "quantile": {
+          "title": "Quantile",
+          "type": "number"
+        }
+      },
+      "required": [
+        "quantile",
+        "log_return",
+        "price"
+      ],
+      "title": "Band",
+      "type": "object"
+    },
+    "Component": {
+      "properties": {
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "signal": {
+          "title": "Signal",
+          "type": "number"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "weight",
+        "signal",
+        "contribution",
+        "note"
+      ],
+      "title": "Component",
+      "type": "object"
+    },
+    "CostSummary": {
+      "properties": {
+        "budget_usd": {
+          "title": "Budget Usd",
+          "type": "number"
+        },
+        "by_agent": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "By Agent",
+          "type": "object"
+        },
+        "calls": {
+          "title": "Calls",
+          "type": "integer"
+        },
+        "tokens": {
+          "title": "Tokens",
+          "type": "integer"
+        },
+        "usd": {
+          "title": "Usd",
+          "type": "number"
+        }
+      },
+      "required": [
+        "usd",
+        "tokens",
+        "calls",
+        "by_agent",
+        "budget_usd"
+      ],
+      "title": "CostSummary",
+      "type": "object"
+    },
+    "Decision": {
+      "properties": {
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "conviction": {
+          "title": "Conviction",
+          "type": "number"
+        },
+        "forecast_edge": {
+          "title": "Forecast Edge",
+          "type": "boolean"
+        },
+        "rating": {
+          "enum": [
+            "Strong Sell",
+            "Sell",
+            "Hold",
+            "Buy",
+            "Strong Buy"
+          ],
+          "title": "Rating",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rating",
+        "score",
+        "conviction",
+        "components",
+        "forecast_edge"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "HorizonForecast": {
+      "properties": {
+        "all_models": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "title": "All Models",
+          "type": "object"
+        },
+        "bands": {
+          "items": {
+            "$ref": "#/$defs/Band"
+          },
+          "title": "Bands",
+          "type": "array"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "integer"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "p_up": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Up"
+        },
+        "skill": {
+          "$ref": "#/$defs/SkillLine"
+        }
+      },
+      "required": [
+        "horizon",
+        "model",
+        "bands",
+        "p_up",
+        "skill",
+        "all_models"
+      ],
+      "title": "HorizonForecast",
+      "type": "object"
+    },
+    "ResearcherCase": {
+      "additionalProperties": false,
+      "properties": {
+        "arguments": {
+          "description": "3-5 arguments, numbers cited like [T3]",
+          "items": {
+            "type": "string"
+          },
+          "title": "Arguments",
+          "type": "array"
+        },
+        "rebuttals": {
+          "description": "Answers to the other side's points (empty in round 1)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Rebuttals",
+          "type": "array"
+        },
+        "thesis": {
+          "description": "The strongest one-paragraph case for your side",
+          "title": "Thesis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "thesis",
+        "arguments",
+        "rebuttals"
+      ],
+      "title": "ResearcherCase",
+      "type": "object"
+    },
+    "Section": {
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Agent"
+        },
+        "key_numbers": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Key Numbers",
+          "type": "object"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalystView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "agent",
+        "view",
+        "text",
+        "key_numbers"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "SkillLine": {
+      "properties": {
+        "coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "dir_acc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir Acc"
+        },
+        "dir_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dir P"
+        },
+        "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P"
+        },
+        "dm_p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dm P Adj"
+        },
+        "edge": {
+          "title": "Edge",
+          "type": "boolean"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "skill_vs_naive": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Skill Vs Naive"
+        },
+        "verdict": {
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "skill_vs_naive",
+        "coverage",
+        "dir_acc",
+        "dir_p",
+        "dm_p",
+        "dm_p_adj",
+        "edge",
+        "verdict"
+      ],
+      "title": "SkillLine",
+      "type": "object"
+    },
+    "Validation": {
+      "properties": {
+        "numeric_violations_fixed": {
+          "title": "Numeric Violations Fixed",
+          "type": "integer"
+        },
+        "sentences_removed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sentences Removed",
+          "type": "array"
+        },
+        "unresolved_validator_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Validator Issues",
+          "type": "array"
+        },
+        "validator_issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Validator Issues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "numeric_violations_fixed",
+        "sentences_removed",
+        "validator_issues",
+        "unresolved_validator_issues"
+      ],
+      "title": "Validation",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+    },
+    "bear_case": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResearcherCase"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bear_summary": {
+      "title": "Bear Summary",
+      "type": "string"
+    },
+    "bull_case": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ResearcherCase"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bull_summary": {
+      "title": "Bull Summary",
+      "type": "string"
+    },
+    "conviction": {
+      "title": "Conviction",
+      "type": "number"
+    },
+    "cost": {
+      "$ref": "#/$defs/CostSummary"
+    },
+    "data_notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Data Notes",
+      "type": "array"
+    },
+    "data_sources": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Data Sources",
+      "type": "array"
+    },
+    "decision": {
+      "$ref": "#/$defs/Decision"
+    },
+    "disclaimer": {
+      "default": "Research and learning output only, paper trading only. Not investment advice. Numbers come from logged tool calls; see the scratchpad for their exact sources.",
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "exposure_note": {
+      "title": "Exposure Note",
+      "type": "string"
+    },
+    "forecast": {
+      "items": {
+        "$ref": "#/$defs/HorizonForecast"
+      },
+      "title": "Forecast",
+      "type": "array"
+    },
+    "forecast_eval": {
+      "title": "Forecast Eval",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "lookahead_warning": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lookahead Warning"
+    },
+    "max_exposure": {
+      "title": "Max Exposure",
+      "type": "number"
+    },
+    "models": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Models",
+      "type": "object"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "rating": {
+      "title": "Rating",
+      "type": "string"
+    },
+    "risk_summary": {
+      "title": "Risk Summary",
+      "type": "string"
+    },
+    "risks": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Risks",
+      "type": "array"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scratchpad": {
+      "title": "Scratchpad",
+      "type": "string"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/Section"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "thesis": {
+      "title": "Thesis",
+      "type": "string"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    },
+    "validation": {
+      "$ref": "#/$defs/Validation"
+    }
+  },
+  "required": [
+    "symbol",
+    "name",
+    "unit",
+    "as_of",
+    "generated_at",
+    "run_id",
+    "rating",
+    "conviction",
+    "decision",
+    "thesis",
+    "forecast",
+    "forecast_eval",
+    "sections",
+    "bull_case",
+    "bear_case",
+    "bull_summary",
+    "bear_summary",
+    "risks",
+    "risk_summary",
+    "max_exposure",
+    "exposure_note",
+    "validation",
+    "data_sources",
+    "data_notes",
+    "models",
+    "cost",
+    "scratchpad"
+  ],
+  "title": "Report",
+  "type": "object"
+}

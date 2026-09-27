@@ -66,6 +66,8 @@ def test_budget_gates(cfg: AppConfig) -> None:
     budget = Budget(
         max_usd_per_run=0.05,
         max_usd_backtest=1,
+        max_usd_eval=1,
+        est_usd_per_question=0.05,
         max_tokens_per_run=10**6,
         preflight_output_fraction=0.5,
     )

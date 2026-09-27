@@ -14,6 +14,8 @@ from fa.agents.schemas import AnalystView, ResearcherCase
 from fa.forecasting.service import HorizonForecast
 from fa.orchestration.decision import Decision
 
+SCHEMA_VERSION = "1"  # bump on any change to the report schema (tests/unit/test_schemas.py)
+
 DISCLAIMER = (
     "Research and learning output only, paper trading only. Not investment advice. "
     "Numbers come from logged tool calls; see the scratchpad for their exact sources."
@@ -73,3 +75,4 @@ class Report(BaseModel):
     scratchpad: str
     lookahead_warning: str | None = None
     disclaimer: str = DISCLAIMER
+    schema_version: str = SCHEMA_VERSION

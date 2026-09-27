@@ -48,3 +48,10 @@ def test_universe_lists_wti() -> None:
     assert result.exit_code == 0
     assert "CL=F" in result.output
     assert "nymex_cl" in result.output
+
+
+def test_doctor_offline(monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    res = CliRunner().invoke(app, ["doctor", "--no-network"])
+    assert res.exit_code == 0, res.output
+    assert "config valid" in res.output and "cache writable" in res.output

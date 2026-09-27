@@ -1,0 +1,413 @@
+{
+  "symbol": "CL=F",
+  "name": "WTI crude oil (NYMEX front month)",
+  "unit": "USD/bbl",
+  "as_of": "2026-09-25",
+  "generated_at": "2026-09-27T19:00:31.133376Z",
+  "run_id": "e4ed64e8",
+  "rating": "Buy",
+  "conviction": 0.44999999999999996,
+  "decision": {
+    "rating": "Buy",
+    "score": 0.44999999999999996,
+    "conviction": 0.44999999999999996,
+    "components": [
+      {
+        "name": "supply_demand_analyst",
+        "weight": 0.3,
+        "signal": 0.6,
+        "contribution": 0.18,
+        "note": "bullish, confidence 0.60"
+      },
+      {
+        "name": "technical_analyst",
+        "weight": 0.2,
+        "signal": 0.6,
+        "contribution": 0.12,
+        "note": "bullish, confidence 0.60"
+      },
+      {
+        "name": "sentiment_analyst",
+        "weight": 0.1,
+        "signal": 0.6,
+        "contribution": 0.06,
+        "note": "bullish, confidence 0.60"
+      },
+      {
+        "name": "macro_analyst",
+        "weight": 0.15,
+        "signal": 0.6,
+        "contribution": 0.09,
+        "note": "bullish, confidence 0.60"
+      },
+      {
+        "name": "forecast",
+        "weight": 0.25,
+        "signal": 0.0,
+        "contribution": 0.0,
+        "note": "no measurable edge vs random walk: contributes 0"
+      }
+    ],
+    "forecast_edge": false
+  },
+  "thesis": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+  "forecast": [
+    {
+      "horizon": 1,
+      "model": "naive",
+      "bands": [
+        {
+          "quantile": 0.1,
+          "log_return": -0.01859279546044591,
+          "price": 40.277631284361604
+        },
+        {
+          "quantile": 0.5,
+          "log_return": 0.0,
+          "price": 41.03351022070545
+        },
+        {
+          "quantile": 0.9,
+          "log_return": 0.01967930354538742,
+          "price": 41.84901912886494
+        }
+      ],
+      "p_up": 0.5,
+      "skill": {
+        "model": "naive",
+        "skill_vs_naive": 0.0,
+        "coverage": 0.75,
+        "dir_acc": 0.4375,
+        "dir_p": 0.9702252960686111,
+        "dm_p": null,
+        "dm_p_adj": null,
+        "edge": false,
+        "verdict": "No measurable edge at 1d: no model beats the naive random walk out of sample (best: ensemble, skill -0.3%, adjusted DM p=1 >= 0.05). Showing the random-walk band; treat any direction call as noise."
+      },
+      "all_models": {
+        "naive": {
+          "q0.1": -0.01859279546044591,
+          "q0.5": 0.0,
+          "q0.9": 0.01967930354538742,
+          "p_up": 0.5
+        },
+        "drift": {
+          "q0.1": -0.018799804274395475,
+          "q0.5": -0.00020700881394956642,
+          "q0.9": 0.019472294731437856,
+          "p_up": 0.49666666666666665
+        },
+        "ensemble": {
+          "q0.1": -0.018696253513967406,
+          "q0.5": -0.00010345805352149961,
+          "q0.9": 0.019575845491865924,
+          "p_up": 0.49833407973397204
+        }
+      }
+    },
+    {
+      "horizon": 5,
+      "model": "naive",
+      "bands": [
+        {
+          "quantile": 0.1,
+          "log_return": -0.04333593033199552,
+          "price": 39.29326479800209
+        },
+        {
+          "quantile": 0.5,
+          "log_return": 0.0,
+          "price": 41.03351022070545
+        },
+        {
+          "quantile": 0.9,
+          "log_return": 0.040928432972840836,
+          "price": 42.74778957966982
+        }
+      ],
+      "p_up": 0.5,
+      "skill": {
+        "model": "naive",
+        "skill_vs_naive": 0.0,
+        "coverage": 0.7659574468085106,
+        "dir_acc": 0.44680851063829785,
+        "dir_p": 0.9462924135776888,
+        "dm_p": null,
+        "dm_p_adj": null,
+        "edge": false,
+        "verdict": "No measurable edge at 5d: no model beats the naive random walk out of sample (best: ensemble, skill -0.3%, adjusted DM p=1 >= 0.05). Showing the random-walk band; treat any direction call as noise."
+      },
+      "all_models": {
+        "naive": {
+          "q0.1": -0.04333593033199552,
+          "q0.5": 0.0,
+          "q0.9": 0.040928432972840836,
+          "p_up": 0.5
+        },
+        "drift": {
+          "q0.1": -0.042978873599538864,
+          "q0.5": 0.000357056732456656,
+          "q0.9": 0.041285489705297496,
+          "p_up": 0.5133333333333333
+        },
+        "ensemble": {
+          "q0.1": -0.04315824950268339,
+          "q0.5": 0.000177680829312132,
+          "q0.9": 0.04110611380215297,
+          "p_up": 0.506635017656331
+        }
+      }
+    },
+    {
+      "horizon": 20,
+      "model": "naive",
+      "bands": [
+        {
+          "quantile": 0.1,
+          "log_return": -0.08358582032437763,
+          "price": 37.743121040973826
+        },
+        {
+          "quantile": 0.5,
+          "log_return": 0.0,
+          "price": 41.03351022070545
+        },
+        {
+          "quantile": 0.9,
+          "log_return": 0.07190249465967784,
+          "price": 44.09258157259898
+        }
+      ],
+      "p_up": 0.5,
+      "skill": {
+        "model": "naive",
+        "skill_vs_naive": 0.0,
+        "coverage": 0.7727272727272727,
+        "dir_acc": 0.5454545454545454,
+        "dir_p": 0.6213687240916002,
+        "dm_p": null,
+        "dm_p_adj": null,
+        "edge": false,
+        "verdict": "No measurable edge at 20d: no model beats the naive random walk out of sample (best: ensemble, skill +0.9%, adjusted DM p=1 >= 0.05). Showing the random-walk band; treat any direction call as noise."
+      },
+      "all_models": {
+        "naive": {
+          "q0.1": -0.08358582032437763,
+          "q0.5": 0.0,
+          "q0.9": 0.07190249465967784,
+          "p_up": 0.5
+        },
+        "drift": {
+          "q0.1": -0.07944573622451434,
+          "q0.5": 0.00414008409986329,
+          "q0.9": 0.07604257875954112,
+          "p_up": 0.52
+        },
+        "ensemble": {
+          "q0.1": -0.08152377448020312,
+          "q0.5": 0.002062045844174517,
+          "q0.9": 0.07396454050385236,
+          "p_up": 0.5099613717713736
+        }
+      }
+    }
+  ],
+  "forecast_eval": "walk-forward 2020-10-07..2021-09-01, 12 folds",
+  "sections": [
+    {
+      "title": "Supply & demand",
+      "agent": "supply_demand_analyst",
+      "view": {
+        "stance": "bullish",
+        "confidence": 0.6,
+        "summary": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+        "key_points": [
+          "The cot.mm_net reading is -164985.0 [T1].",
+          "The crack_321_usd_bbl.value reading is 68.191 [T2].",
+          "The inventories[0].value reading is 390.22 [T4].",
+          "The curve.contracts[0].settle reading is 92.41 [T6]."
+        ],
+        "red_flags": [],
+        "data_gaps": []
+      },
+      "text": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "key_numbers": {
+        "crude_stocks_ex_spr vs 5y avg": "+0.5%",
+        "cushing_stocks vs 5y avg": "-0.3%",
+        "crude_production vs 5y avg": "+0.6%",
+        "refinery_utilization vs 5y avg": "+0.1%",
+        "managed money net, 3y percentile": 36.774193548387096,
+        "curve": "backwardation",
+        "roll yield (annualized)": "+48.1%",
+        "3-2-1 crack (USD/bbl)": 68.190994878479
+      }
+    },
+    {
+      "title": "Technicals",
+      "agent": "technical_analyst",
+      "view": {
+        "stance": "bullish",
+        "confidence": 0.6,
+        "summary": "The price.last_close reading is 92.41 [T8].",
+        "key_points": [
+          "The price.last_close reading is 92.41 [T8]."
+        ],
+        "red_flags": [],
+        "data_gaps": []
+      },
+      "text": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "key_numbers": {
+        "last settle": 92.410004,
+        "20d change": "+15.0%",
+        "RSI14": 53.77406832574524,
+        "trend": "uptrend",
+        "vol regime": "normal"
+      }
+    },
+    {
+      "title": "News & sentiment",
+      "agent": "sentiment_analyst",
+      "view": {
+        "stance": "bullish",
+        "confidence": 0.6,
+        "summary": "The cot.mm_net reading is -164985.0 [T10].",
+        "key_points": [
+          "The cot.mm_net reading is -164985.0 [T10]."
+        ],
+        "red_flags": [],
+        "data_gaps": []
+      },
+      "text": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "key_numbers": {
+        "managed money net, 3y percentile": 36.774193548387096
+      }
+    },
+    {
+      "title": "Macro",
+      "agent": "macro_analyst",
+      "view": {
+        "stance": "bullish",
+        "confidence": 0.6,
+        "summary": "The evidence is qualitative.",
+        "key_points": [
+          "The evidence is qualitative."
+        ],
+        "red_flags": [],
+        "data_gaps": []
+      },
+      "text": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "key_numbers": {}
+    },
+    {
+      "title": "Forecast",
+      "agent": "forecast_interpreter",
+      "view": {
+        "stance": "bullish",
+        "confidence": 0.6,
+        "summary": "The last_close reading is 41.0335 [T16].",
+        "key_points": [
+          "The last_close reading is 41.0335 [T16]."
+        ],
+        "red_flags": [],
+        "data_gaps": []
+      },
+      "text": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "key_numbers": {
+        "1d P(up)": "50%",
+        "5d P(up)": "50%",
+        "20d P(up)": "50%",
+        "edge vs random walk": "no"
+      }
+    }
+  ],
+  "bull_case": {
+    "thesis": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+    "arguments": [
+      "The cot.mm_net reading is -164985.0 [T1].",
+      "The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "The inventories[0].value reading is 390.22 [T4].",
+      "The curve.contracts[0].settle reading is 92.41 [T6]."
+    ],
+    "rebuttals": []
+  },
+  "bear_case": {
+    "thesis": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+    "arguments": [
+      "The cot.mm_net reading is -164985.0 [T1].",
+      "The crack_321_usd_bbl.value reading is 68.191 [T2].",
+      "The inventories[0].value reading is 390.22 [T4].",
+      "The curve.contracts[0].settle reading is 92.41 [T6]."
+    ],
+    "rebuttals": []
+  },
+  "bull_summary": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+  "bear_summary": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+  "risks": [
+    "The last_close reading is 41.0335 [T18].",
+    "The price.last_close reading is 92.41 [T19]."
+  ],
+  "risk_summary": "The cot.mm_net reading is -164985.0 [T1]. The crack_321_usd_bbl.value reading is 68.191 [T2].",
+  "max_exposure": 0.25,
+  "exposure_note": "reviewer suggested 90%; capped at the code limit 25%",
+  "validation": {
+    "numeric_violations_fixed": 0,
+    "sentences_removed": [],
+    "validator_issues": [],
+    "unresolved_validator_issues": []
+  },
+  "data_sources": [
+    "cftc:067651 (2026-09-27 12:00 UTC)",
+    "eia:PET.WCESTUS1.W (2026-09-27 12:00 UTC)",
+    "eia:PET.WCRFPUS2.W (2026-09-27 12:00 UTC)",
+    "eia:PET.WPULEUS3.W (2026-09-27 12:00 UTC)",
+    "eia:PET.W_EPC0_SAX_YCUOK_MBBL.W (2026-09-27 12:00 UTC)",
+    "yahoo:CL=F (2026-09-27 12:00 UTC)",
+    "yahoo:CLF27.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:CLG27.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:CLH27.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:CLJ27.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:CLX26.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:CLZ26.NYM (2026-09-27 12:00 UTC)",
+    "yahoo:HO=F (2026-09-27 12:00 UTC)",
+    "yahoo:RB=F (2026-09-27 12:00 UTC)"
+  ],
+  "data_notes": [
+    "data quality [warn] zero_volume: volume == 0",
+    "3-2-1 crack: a leg is rolling, so legs may reference different months",
+    "auto_select = the leaderboard leader chosen on earlier folds only, re-chosen each fold: the out-of-sample score of 'use whichever model leads'."
+  ],
+  "models": {
+    "supply_demand_analyst": "claude-sonnet-5 (low), prompt v1+common2",
+    "technical_analyst": "claude-sonnet-5 (low), prompt v1+common2",
+    "sentiment_analyst": "claude-sonnet-5 (low), prompt v1+common2",
+    "macro_analyst": "claude-sonnet-5 (low), prompt v1+common2",
+    "forecast_interpreter": "claude-sonnet-5 (low), prompt v1+common2",
+    "validator": "claude-opus-5-5 (medium), prompt v2+common2",
+    "bull_researcher": "claude-sonnet-5 (low), prompt v1+common2",
+    "bear_researcher": "claude-sonnet-5 (low), prompt v1+common2",
+    "risk_reviewer": "claude-sonnet-5 (low), prompt v1+common2",
+    "synthesizer": "claude-opus-5-5 (medium), prompt v1+common2"
+  },
+  "cost": {
+    "usd": 0.132,
+    "tokens": 34200,
+    "calls": 19,
+    "by_agent": {
+      "supply_demand_analyst": 0.012,
+      "technical_analyst": 0.012,
+      "sentiment_analyst": 0.012,
+      "macro_analyst": 0.012,
+      "forecast_interpreter": 0.012,
+      "validator": 0.024,
+      "bull_researcher": 0.012,
+      "bear_researcher": 0.012,
+      "risk_reviewer": 0.012,
+      "synthesizer": 0.012
+    },
+    "budget_usd": 1.0
+  },
+  "scratchpad": ".runs/example.jsonl",
+  "lookahead_warning": null,
+  "disclaimer": "Research and learning output only, paper trading only. Not investment advice. Numbers come from logged tool calls; see the scratchpad for their exact sources.",
+  "schema_version": "1"
+}

@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "description": "One question, answered from tool results (plan -> act -> answer; code validates).",
+  "properties": {
+    "answer": {
+      "description": "1-3 sentences answering the question, citing [T#]",
+      "title": "Answer",
+      "type": "string"
+    },
+    "answerable": {
+      "description": "False if the tools cannot answer it (missing data, future dates, out of scope); then leave value and choice null",
+      "title": "Answerable",
+      "type": "boolean"
+    },
+    "choice": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "For yes/no or category questions: the answer word (e.g. 'yes', 'backwardation', 'uptrend'), otherwise null",
+      "title": "Choice"
+    },
+    "citations": {
+      "description": "Result ids that support the answer, e.g. ['T2']",
+      "items": {
+        "type": "string"
+      },
+      "title": "Citations",
+      "type": "array"
+    },
+    "plan": {
+      "description": "1-4 short steps: which tools you will call and why (no numbers)",
+      "items": {
+        "type": "string"
+      },
+      "title": "Plan",
+      "type": "array"
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Unit of value, e.g. 'USD/bbl', 'fraction', 'contracts'",
+      "title": "Unit"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The single number that answers the question, copied from a cited tool result (fractions as given, e.g. 0.074), or null",
+      "title": "Value"
+    }
+  },
+  "required": [
+    "plan",
+    "answerable",
+    "value",
+    "unit",
+    "choice",
+    "answer",
+    "citations"
+  ],
+  "title": "ResearchAnswer",
+  "type": "object"
+}

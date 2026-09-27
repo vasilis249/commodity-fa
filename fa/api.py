@@ -303,7 +303,7 @@ class RunSummary(BaseModel):
     path: str
     run_id: str
     started: datetime | None
-    kind: str  # report | backtest decision | other
+    kind: str  # report | question | backtest decision | other
     symbol: str | None
     events: int
     llm_calls: int
@@ -323,7 +323,7 @@ def _summarize_run(p: Path) -> RunSummary:
     rep = next((e for e in ev if e["event"] == "report"), None)
     llm = [e for e in ev if e["event"] == "llm_call"]
     kind = (
-        "report"
+        ("question" if start.get("kind") == "question" else "report")
         if start
         else "backtest decision"
         if "backtest_decision" in by

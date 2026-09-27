@@ -1,0 +1,1142 @@
+{
+  "$defs": {
+    "ContractQuote": {
+      "properties": {
+        "contract": {
+          "title": "Contract",
+          "type": "string"
+        },
+        "expiry": {
+          "format": "date",
+          "title": "Expiry",
+          "type": "string"
+        },
+        "settle": {
+          "title": "Settle",
+          "type": "number"
+        },
+        "settle_date": {
+          "format": "date",
+          "title": "Settle Date",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract",
+        "expiry",
+        "settle",
+        "settle_date"
+      ],
+      "title": "ContractQuote",
+      "type": "object"
+    },
+    "CotBlock": {
+      "properties": {
+        "commercial_net": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Commercial Net"
+        },
+        "mm_net": {
+          "title": "Mm Net",
+          "type": "number"
+        },
+        "mm_net_change_1w": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mm Net Change 1W"
+        },
+        "mm_net_pct_oi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mm Net Pct Oi"
+        },
+        "mm_net_pctile_3y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mm Net Pctile 3Y"
+        },
+        "released_at": {
+          "format": "date-time",
+          "title": "Released At",
+          "type": "string"
+        },
+        "report_date": {
+          "format": "date",
+          "title": "Report Date",
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_date",
+        "released_at",
+        "mm_net",
+        "mm_net_pct_oi",
+        "mm_net_change_1w",
+        "mm_net_pctile_3y",
+        "commercial_net"
+      ],
+      "title": "CotBlock",
+      "type": "object"
+    },
+    "CrackBlock": {
+      "properties": {
+        "date": {
+          "format": "date",
+          "title": "Date",
+          "type": "string"
+        },
+        "pctile_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pctile 1Y"
+        },
+        "roll_affected": {
+          "title": "Roll Affected",
+          "type": "boolean"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "date",
+        "value",
+        "pctile_1y",
+        "roll_affected"
+      ],
+      "title": "CrackBlock",
+      "type": "object"
+    },
+    "CurveBlock": {
+      "properties": {
+        "contracts": {
+          "items": {
+            "$ref": "#/$defs/ContractQuote"
+          },
+          "title": "Contracts",
+          "type": "array"
+        },
+        "metrics": {
+          "$ref": "#/$defs/CurveMetrics"
+        }
+      },
+      "required": [
+        "contracts",
+        "metrics"
+      ],
+      "title": "CurveBlock",
+      "type": "object"
+    },
+    "CurveMetrics": {
+      "properties": {
+        "contracts": {
+          "title": "Contracts",
+          "type": "integer"
+        },
+        "front": {
+          "title": "Front",
+          "type": "string"
+        },
+        "front_to_back_ann": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Front To Back Ann"
+        },
+        "m1_m2_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "M1 M2 Pct"
+        },
+        "m1_m2_spread": {
+          "title": "M1 M2 Spread",
+          "type": "number"
+        },
+        "roll_yield_ann": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Roll Yield Ann"
+        },
+        "second": {
+          "title": "Second",
+          "type": "string"
+        },
+        "structure": {
+          "enum": [
+            "backwardation",
+            "contango",
+            "flat",
+            "mixed"
+          ],
+          "title": "Structure",
+          "type": "string"
+        }
+      },
+      "required": [
+        "front",
+        "second",
+        "m1_m2_spread",
+        "m1_m2_pct",
+        "roll_yield_ann",
+        "front_to_back_ann",
+        "structure",
+        "contracts"
+      ],
+      "title": "CurveMetrics",
+      "type": "object"
+    },
+    "InventoryBlock": {
+      "properties": {
+        "avg5": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Avg5"
+        },
+        "band_pos": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Band Pos"
+        },
+        "dev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dev"
+        },
+        "dev_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dev Pct"
+        },
+        "max5": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max5"
+        },
+        "min5": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min5"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "period": {
+          "format": "date",
+          "title": "Period",
+          "type": "string"
+        },
+        "released_at": {
+          "format": "date-time",
+          "title": "Released At",
+          "type": "string"
+        },
+        "series_id": {
+          "title": "Series Id",
+          "type": "string"
+        },
+        "units": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Units"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "wow": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wow"
+        },
+        "wow_vs_seasonal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wow Vs Seasonal"
+        }
+      },
+      "required": [
+        "name",
+        "series_id",
+        "period",
+        "released_at",
+        "units",
+        "value",
+        "wow",
+        "wow_vs_seasonal",
+        "avg5",
+        "dev",
+        "dev_pct",
+        "min5",
+        "max5",
+        "band_pos"
+      ],
+      "title": "InventoryBlock",
+      "type": "object"
+    },
+    "LevelOut": {
+      "properties": {
+        "last_seen": {
+          "format": "date",
+          "title": "Last Seen",
+          "type": "string"
+        },
+        "price": {
+          "title": "Price",
+          "type": "number"
+        },
+        "touches": {
+          "title": "Touches",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "price",
+        "touches",
+        "last_seen"
+      ],
+      "title": "LevelOut",
+      "type": "object"
+    },
+    "MonthStats": {
+      "properties": {
+        "first_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Year"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hit Rate"
+        },
+        "last_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Year"
+        },
+        "mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean"
+        },
+        "median": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Median"
+        },
+        "month": {
+          "title": "Month",
+          "type": "integer"
+        },
+        "t_stat": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "T Stat"
+        },
+        "years": {
+          "title": "Years",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "month",
+        "years",
+        "mean",
+        "median",
+        "hit_rate",
+        "t_stat",
+        "first_year",
+        "last_year"
+      ],
+      "title": "MonthStats",
+      "type": "object"
+    },
+    "PositionSize": {
+      "description": "Suggested max exposure (fraction of equity, long or short) and why.",
+      "properties": {
+        "binding": {
+          "title": "Binding",
+          "type": "string"
+        },
+        "fraction": {
+          "title": "Fraction",
+          "type": "number"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "vol_target_fraction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vol Target Fraction"
+        }
+      },
+      "required": [
+        "fraction",
+        "vol_target_fraction",
+        "binding",
+        "reasons"
+      ],
+      "title": "PositionSize",
+      "type": "object"
+    },
+    "PriceBlock": {
+      "description": "Changes use the roll-adjusted series; masked days count as 0 in multi-day changes.",
+      "properties": {
+        "change_1d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 1D"
+        },
+        "change_20d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 20D"
+        },
+        "change_5d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 5D"
+        },
+        "change_60d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change 60D"
+        },
+        "change_ytd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Change Ytd"
+        },
+        "high_52w": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "High 52W"
+        },
+        "last_close": {
+          "title": "Last Close",
+          "type": "number"
+        },
+        "last_date": {
+          "format": "date",
+          "title": "Last Date",
+          "type": "string"
+        },
+        "low_52w": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Low 52W"
+        },
+        "pct_from_52w_high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pct From 52W High"
+        }
+      },
+      "required": [
+        "last_date",
+        "last_close",
+        "change_1d",
+        "change_5d",
+        "change_20d",
+        "change_60d",
+        "change_ytd",
+        "high_52w",
+        "low_52w",
+        "pct_from_52w_high"
+      ],
+      "title": "PriceBlock",
+      "type": "object"
+    },
+    "RiskBlock": {
+      "properties": {
+        "cvar95_1d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cvar95 1D"
+        },
+        "drawdown_from_1y_high": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Drawdown From 1Y High"
+        },
+        "max_drawdown_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Drawdown 1Y"
+        },
+        "position": {
+          "$ref": "#/$defs/PositionSize"
+        },
+        "return_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Return 1Y"
+        },
+        "sharpe_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sharpe 1Y"
+        },
+        "sortino_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sortino 1Y"
+        },
+        "var95_1d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Var95 1D"
+        },
+        "vol_1y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vol 1Y"
+        },
+        "vol_20d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vol 20D"
+        }
+      },
+      "required": [
+        "vol_20d",
+        "vol_1y",
+        "return_1y",
+        "sharpe_1y",
+        "sortino_1y",
+        "max_drawdown_1y",
+        "drawdown_from_1y_high",
+        "var95_1d",
+        "cvar95_1d",
+        "position"
+      ],
+      "title": "RiskBlock",
+      "type": "object"
+    },
+    "SeasonBlock": {
+      "properties": {
+        "month_name": {
+          "title": "Month Name",
+          "type": "string"
+        },
+        "stats": {
+          "$ref": "#/$defs/MonthStats"
+        }
+      },
+      "required": [
+        "month_name",
+        "stats"
+      ],
+      "title": "SeasonBlock",
+      "type": "object"
+    },
+    "SourceRef": {
+      "properties": {
+        "fetched_at": {
+          "format": "date-time",
+          "title": "Fetched At",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "key",
+        "fetched_at",
+        "source"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "TechBlock": {
+      "properties": {
+        "atr14": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Atr14"
+        },
+        "atr_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Atr Pct"
+        },
+        "bb_lower": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bb Lower"
+        },
+        "bb_pct_b": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bb Pct B"
+        },
+        "bb_upper": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bb Upper"
+        },
+        "ema20": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ema20"
+        },
+        "macd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Macd"
+        },
+        "macd_hist": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Macd Hist"
+        },
+        "macd_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Macd Signal"
+        },
+        "resistance": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "title": "Resistance",
+          "type": "array"
+        },
+        "rsi14": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rsi14"
+        },
+        "sma20": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sma20"
+        },
+        "sma200": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sma200"
+        },
+        "sma50": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sma50"
+        },
+        "support": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "title": "Support",
+          "type": "array"
+        },
+        "trend": {
+          "title": "Trend",
+          "type": "string"
+        },
+        "vol_percentile_3y": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vol Percentile 3Y"
+        },
+        "vol_regime": {
+          "title": "Vol Regime",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sma20",
+        "sma50",
+        "sma200",
+        "ema20",
+        "rsi14",
+        "macd",
+        "macd_signal",
+        "macd_hist",
+        "bb_upper",
+        "bb_lower",
+        "bb_pct_b",
+        "atr14",
+        "atr_pct",
+        "trend",
+        "vol_regime",
+        "vol_percentile_3y",
+        "support",
+        "resistance"
+      ],
+      "title": "TechBlock",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+    },
+    "cot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CotBlock"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "crack": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CrackBlock"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "curve": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CurveBlock"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decision_time": {
+      "format": "date-time",
+      "title": "Decision Time",
+      "type": "string"
+    },
+    "disclaimer": {
+      "default": "Research output, paper trading only. Not investment advice.",
+      "title": "Disclaimer",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "inventories": {
+      "items": {
+        "$ref": "#/$defs/InventoryBlock"
+      },
+      "title": "Inventories",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "price": {
+      "$ref": "#/$defs/PriceBlock"
+    },
+    "risk": {
+      "$ref": "#/$defs/RiskBlock"
+    },
+    "seasonality": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SeasonBlock"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "technicals": {
+      "$ref": "#/$defs/TechBlock"
+    },
+    "unit": {
+      "title": "Unit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "name",
+    "unit",
+    "as_of",
+    "decision_time",
+    "generated_at",
+    "price",
+    "technicals",
+    "risk",
+    "seasonality",
+    "inventories",
+    "cot",
+    "crack",
+    "curve",
+    "notes",
+    "sources"
+  ],
+  "title": "Snapshot",
+  "type": "object"
+}

@@ -1,4 +1,4 @@
-.PHONY: install test lint fmt typecheck check app
+.PHONY: install test lint fmt typecheck check app schemas evals
 
 install:
 	uv sync
@@ -21,3 +21,9 @@ check: lint typecheck test
 
 app:
 	uv run streamlit run app/main.py
+
+schemas:
+	uv run python scripts/update_schemas.py
+
+evals:
+	uv run fa eval

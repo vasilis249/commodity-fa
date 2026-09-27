@@ -323,6 +323,8 @@ class RoleSpec(_Strict):
 class Budget(_Strict):
     max_usd_per_run: float = Field(gt=0)
     max_usd_backtest: float = Field(gt=0)
+    max_usd_eval: float = Field(gt=0)
+    est_usd_per_question: float = Field(gt=0)
     max_tokens_per_run: int = Field(gt=0)
     preflight_output_fraction: float = Field(gt=0, le=1)
 

@@ -15,6 +15,8 @@ agents:
   risk_reviewer: {enabled: true, tools: [risk_metrics, risk_limits, price_technicals, forecast]}
   validator: {enabled: true, tools: []}
   synthesizer: {enabled: true, tools: []}
+  # `fa ask` / `fa eval`: one question, any tool (plan -> act -> validate -> answer)
+  research_agent: {enabled: true, tools: [price_technicals, risk_metrics, risk_limits, seasonality, inventories, cot_positioning, crack_spread, term_structure, data_quality, forecast, forecast_leaderboard, news_headlines, event_calendar, macro_series, relative_strength]}
 
 # Final rating is computed in code from these weights; the synthesizer only explains it.
 decision_weights:
