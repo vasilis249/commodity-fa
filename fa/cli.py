@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from fa import __version__
 from fa.config import DEFAULT_CONFIG_DIR, AppConfig, load_config, load_secrets
+from fa.data.cli import app as data_app
 
 DISCLAIMER = "Research tool, paper trading only. Not investment advice."
 
@@ -21,6 +22,7 @@ app = typer.Typer(
 )
 config_app = typer.Typer(help="Inspect and validate config/*.yaml.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
+app.add_typer(data_app, name="data")
 
 ConfigDirOpt = Annotated[
     Path, typer.Option("--config-dir", help="Directory holding the YAML config files.")

@@ -6,9 +6,11 @@ Secrets are read by pydantic-settings and never printed or logged.
 
 from __future__ import annotations
 
+from datetime import time
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -45,9 +47,19 @@ class Instrument(_Strict):
     currency: str
     unit: str
     roll_rule: RollRule
+    settle_time: time  # daily settlement/close, local to `timezone`
+    timezone: str
+    contract_root: str | None = None  # e.g. "CL"; individual contracts are CLZ26 etc.
     cot_market_code: str | None = None
     eia_series: dict[str, str] = Field(default_factory=dict)
     fred_spot: str | None = None
+    news_queries: list[str] = Field(default_factory=list)
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, v: str) -> str:
+        ZoneInfo(v)  # raises for unknown zones
+        return v
 
     @model_validator(mode="after")
     def _roll_rule_matches_class(self) -> Instrument:
@@ -58,10 +70,43 @@ class Instrument(_Strict):
         return self
 
 
-class ReleaseLag(_Strict):
-    period_end: str
-    released: str
-    time_et: str
+Weekday = Literal["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+
+class ReleaseSchedule(_Strict):
+    """A weekly publication: the first `weekday` after the period end, at `release_time` in `tz`.
+
+    Each `calendar` holiday between the Monday of the release week and the nominal
+    release day pushes the release one business day later (a conservative rule:
+    a later timestamp never leaks).
+    """
+
+    weekday: Weekday
+    release_time: time
+    tz: str
+    calendar: Literal["us_federal", "cme", "uk"]
+
+
+class RollSettings(_Strict):
+    window_before: int = Field(ge=0)  # sessions before expiry in which a switch may happen
+    window_after: int = Field(ge=0)
+    min_volume_ratio: float = Field(gt=1)  # day-over-day volume jump marking the switch
+    mask_after: int = Field(ge=0)  # extra sessions masked after the volume jump
+
+
+class CacheTTL(_Strict):
+    prices_hours: float = Field(gt=0)
+    eia_hours: float = Field(gt=0)
+    cot_hours: float = Field(gt=0)
+    fred_hours: float = Field(gt=0)
+    news_hours: float = Field(gt=0)
+
+
+class QualitySettings(_Strict):
+    stale_sessions: int = Field(gt=0)  # last bar older than this many sessions -> stale
+    max_gap_sessions: int = Field(gt=0)  # consecutive missing sessions tolerated
+    repeated_close_run: int = Field(ge=2)  # identical closes in a row -> stale quote
+    outlier_mad_multiple: float = Field(gt=0)
 
 
 class ProviderLimits(_Strict):
@@ -69,13 +114,38 @@ class ProviderLimits(_Strict):
     max_retries: int = Field(ge=0)
 
 
+REQUIRED_PROVIDERS = frozenset({"yahoo", "eia", "cftc", "fred", "news_rss"})
+
+
 class DataConfig(_Strict):
     cache_dir: Path
     default_history_years: int = Field(gt=0)
     universe: list[Instrument]
     fred_macro: dict[str, str]
-    release_lags: dict[str, ReleaseLag]
+    fred_availability_lag_days: int = Field(ge=0)
+    releases: dict[str, ReleaseSchedule]
+    eia_release_by_prefix: dict[str, str]
+    rolls: RollSettings
+    quality: QualitySettings
+    cache_ttl: CacheTTL
+    news_feeds: list[str]
     providers: dict[str, ProviderLimits]
+
+    @model_validator(mode="after")
+    def _references_resolve(self) -> DataConfig:
+        for prefix, release in self.eia_release_by_prefix.items():
+            if release not in self.releases:
+                raise ValueError(f"eia_release_by_prefix.{prefix} -> unknown release '{release}'")
+        for inst in self.universe:
+            for sid in inst.eia_series.values():
+                if sid.split(".", 1)[0] not in self.eia_release_by_prefix:
+                    raise ValueError(f"{inst.symbol}: no release schedule for EIA series {sid}")
+        if "cftc_cot" not in self.releases:
+            raise ValueError("releases.cftc_cot is required")
+        missing = REQUIRED_PROVIDERS - set(self.providers)
+        if missing:
+            raise ValueError(f"providers missing rate limits: {sorted(missing)}")
+        return self
 
     @field_validator("universe")
     @classmethod

@@ -13,6 +13,10 @@ universe:
     exchange: NYMEX
     currency: USD
     unit: USD/bbl
+    settle_time: "14:30"
+    timezone: America/New_York
+    contract_root: CL
+    news_queries: ["WTI crude oil price", "OPEC oil supply"]
     roll_rule: nymex_cl          # expires 3 business days before the 25th of the month prior to delivery
     cot_market_code: "067651"    # CFTC: WTI-PHYSICAL - NYMEX
     eia_series:                  # legacy series ids, served by EIA API v2 /seriesid/
@@ -29,6 +33,10 @@ universe:
     exchange: ICE
     currency: USD
     unit: USD/bbl
+    settle_time: "14:30"
+    timezone: America/New_York
+    contract_root: BZ
+    news_queries: ["Brent crude oil price", "OPEC oil supply"]
     roll_rule: ice_brent         # last business day of the second month preceding delivery
     cot_market_code: "06765T"    # CFTC: BRENT LAST DAY - NYMEX (ICE Europe publishes its own COT)
     eia_series: {}
@@ -41,6 +49,10 @@ universe:
     exchange: NYMEX
     currency: USD
     unit: USD/MMBtu
+    settle_time: "14:30"
+    timezone: America/New_York
+    contract_root: NG
+    news_queries: ["Henry Hub natural gas price", "US natural gas storage"]
     roll_rule: nymex_ng          # expires 3 business days before the first calendar day of delivery month
     cot_market_code: "023651"    # CFTC: NAT GAS NYME - NYMEX
     eia_series:
@@ -54,6 +66,9 @@ universe:
     exchange: ICE Endex
     currency: EUR
     unit: EUR/MWh
+    settle_time: "17:30"
+    timezone: Europe/Amsterdam
+    news_queries: ["TTF gas price Europe", "European gas storage"]
     roll_rule: ice_endex_ttf     # expires 2 business days before the first calendar day of delivery month
     cot_market_code: null        # not in CFTC reports
     eia_series: {}
@@ -66,6 +81,10 @@ universe:
     exchange: NYMEX
     currency: USD
     unit: USD/gal
+    settle_time: "14:30"
+    timezone: America/New_York
+    contract_root: HO
+    news_queries: ["diesel heating oil prices", "distillate inventories"]
     roll_rule: nymex_last_bd_prior_month
     cot_market_code: "022651"    # CFTC: NY HARBOR ULSD - NYMEX
     eia_series:
@@ -79,6 +98,10 @@ universe:
     exchange: NYMEX
     currency: USD
     unit: USD/gal
+    settle_time: "14:30"
+    timezone: America/New_York
+    contract_root: RB
+    news_queries: ["gasoline prices RBOB", "US gasoline demand"]
     roll_rule: nymex_last_bd_prior_month
     cot_market_code: "111659"    # CFTC: GASOLINE RBOB - NYMEX
     eia_series:
@@ -86,9 +109,9 @@ universe:
     fred_spot: null
 
   # Tradable proxies: no roll handling (the fund rolls internally; roll cost is in its NAV).
-  - {symbol: USO, name: United States Oil Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
-  - {symbol: UNG, name: United States Natural Gas Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
-  - {symbol: XLE, name: Energy Select Sector SPDR, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
+  - {symbol: USO, name: United States Oil Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, settle_time: "16:00", timezone: America/New_York, roll_rule: none}
+  - {symbol: UNG, name: United States Natural Gas Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, settle_time: "16:00", timezone: America/New_York, roll_rule: none}
+  - {symbol: XLE, name: Energy Select Sector SPDR, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, settle_time: "16:00", timezone: America/New_York, roll_rule: none}
 
 # Macro series (FRED) shared by all assets.
 fred_macro:
@@ -99,14 +122,47 @@ fred_macro:
   breakeven_10y: T10YIE
   industrial_production: INDPRO
 
-# Release timing used for point-in-time joins (data is usable only AFTER release).
-release_lags:
-  eia_petroleum_weekly: {period_end: friday, released: wednesday, time_et: "10:30"}
-  eia_gas_storage_weekly: {period_end: friday, released: thursday, time_et: "10:30"}
-  cftc_cot: {period_end: tuesday, released: friday, time_et: "15:30"}
+# Point-in-time rules: a value may be used only once it was published.
+# Weekly releases: first `weekday` after the period end, shifted one business day per
+# holiday between that week's Monday and the nominal day (conservative).
+releases:
+  eia_petroleum_weekly: {weekday: wednesday, release_time: "10:30", tz: America/New_York, calendar: us_federal}
+  eia_gas_storage_weekly: {weekday: thursday, release_time: "10:30", tz: America/New_York, calendar: us_federal}
+  cftc_cot: {weekday: friday, release_time: "15:30", tz: America/New_York, calendar: us_federal}
+eia_release_by_prefix:
+  PET: eia_petroleum_weekly
+  NG: eia_gas_storage_weekly
+# FRED values come from the initial release (ALFRED output_type=4); usable this many
+# days after their first-publication date.
+fred_availability_lag_days: 1
+
+# Continuous-futures roll handling (see fa/data/rolls.py for the evidence behind these).
+rolls:
+  window_before: 4        # Yahoo switched up to 3 sessions before expiry in Sep 2026
+  window_after: 1         # ...and up to 1 session after (CL)
+  min_volume_ratio: 1.8   # day-over-day volume jump that marks the switch
+  mask_after: 1           # price switches on the volume-jump day or the next one
+
+quality:
+  stale_sessions: 3
+  max_gap_sessions: 2
+  repeated_close_run: 4
+  outlier_mad_multiple: 10
+
+cache_ttl:
+  prices_hours: 12
+  eia_hours: 24
+  cot_hours: 24
+  fred_hours: 24
+  news_hours: 1
+
+# General energy news feeds (RSS), in addition to per-instrument Google News queries.
+news_feeds:
+  - https://www.eia.gov/rss/todayinenergy.xml
+  - https://oilprice.com/rss/main
 
 providers:
-  yfinance: {min_interval_s: 1.0, max_retries: 4}
+  yahoo: {min_interval_s: 1.0, max_retries: 4}
   eia: {min_interval_s: 0.5, max_retries: 4}
   cftc: {min_interval_s: 0.5, max_retries: 4}
   fred: {min_interval_s: 0.5, max_retries: 4}

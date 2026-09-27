@@ -5,7 +5,7 @@ A local research tool for **energy-commodity analysis and probabilistic price fo
 > Research and learning only. Paper trading only: no broker connections and no order execution. **Not investment advice.**
 
 ## Status
-Phase 0 (scaffold) is done. See `CLAUDE.md` for the roadmap and conventions.
+Phases 0 (scaffold) and 1 (data layer) are done. See `CLAUDE.md` for the roadmap and conventions.
 
 ## Quick start
 ```bash
@@ -15,6 +15,13 @@ uv run fa --help
 uv run fa config check   # validate config/*.yaml, show which keys are set
 uv run fa universe       # list configured instruments
 make check               # lint + typecheck + tests
+
+uv run fa data prices CL=F            # 10y WTI, roll-adjusted returns, quality report (cached)
+uv run fa data prices CL=F --offline  # from cache only
+uv run fa data eia CL=F               # EIA weekly inventories with release timestamps
+uv run fa data cot CL=F               # CFTC managed-money positioning
+uv run fa data news CL=F              # recent headlines
+uv run pytest -m network              # live acceptance test (needs internet)
 ```
 
 ## API keys

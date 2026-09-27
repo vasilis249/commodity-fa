@@ -13,6 +13,10 @@ make check                   # lint + typecheck + tests
 uv run fa --help
 uv run fa config check       # validate config/*.yaml, show which keys are set
 uv run fa universe
+uv run fa data prices CL=F [--years 10] [--offline] [--refresh] [-v]   # prices + roll masks + quality
+uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
+uv run fa data cache                                                     # list cache entries
+uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
 ```
 Optional extras (declared in the phase that needs them): `uv sync --extra foundation` for Chronos-2 on CPU.
 
@@ -47,10 +51,28 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - **The supply/demand analyst replaces the fundamental analyst.** It covers inventories vs the 5-year seasonal band, storage surplus or deficit, crack spreads, term structure and roll yield, and COT percentile.
 - **The event calendar** covers EIA weekly releases, OPEC+ meetings, contract expiry, FOMC and hurricane season.
 
+## Data layer (Phase 1)
+- Upper layers get data **only** through `fa.data.service.DataService`. It provides `prices()` (a `PriceData` with roll-adjusted frame, roll events and quality report), `eia()`, `cot()`, `fred()` and `news()`.
+- Providers (`fa/data/providers/`) only fetch and normalize. Cache (`fa/data/cache.py`): Parquet plus JSON meta per (provider, key). A stale entry refetches only its tail (7-day overlap), and an earlier start fetches only the missing head. `--offline` never touches the network.
+- Every non-price series carries `available_at` (UTC). Always align it with `fa.data.pit.pit_join`, which compares against the settlement time (`Instrument.settle_time`/`timezone`).
+- Price frames: `ret` is the log return, NaN when masked. `mask_reason` is one of `roll`, `nonpositive_price` or `missing`. `close_adj` is a continuous close anchored at the latest bar.
+- **Rolls:** Yahoo's `=F` switch is found as the largest day-over-day volume jump within [expiry−4, expiry+1] sessions. That session and the next are masked; with no jump, the whole window is masked. This masks about 10% of futures returns. Evidence is in the `fa/data/rolls.py` docstring and `tests/fixtures/README.md`.
+- **Free-source limits:**
+  - Yahoo has no history for expired contracts.
+  - EIA stopped publishing futures prices in April 2024.
+  - The EIA API serves latest-revision values.
+  - Without `EIA_API_KEY`, the EIA provider falls back to `DEMO_KEY` (about 10 requests per hour).
+  - FRED needs a key.
+  - News RSS is live-only.
+- Errors never contain secrets: `fa.data.http.redact` strips `api_key=` and similar from messages.
+
 ## Leakage rules (the `leakage-auditor` subagent checks these at the end of phases 2–5)
 - **Point-in-time joins at release time, never at observation date.** EIA petroleum data (week to Friday) is released Wednesday 10:30 ET. EIA gas storage comes out Thursday 10:30 ET. COT (as of Tuesday) comes out Friday 15:30 ET. See `config/data.yaml: release_lags`.
 - **Continuous futures:** yfinance `=F` series are unadjusted front months. Roll-day returns are fake. Back-adjust using only information known at each date, or mask roll days.
+- **Roll masks use up to 1 session of look-ahead** (`window_after`) to locate Yahoo's splice point. That's vendor metadata, not market information. However, features computed inside an open roll window (`RollEvent.provisional`, or any window that contains the decision date) must treat that window's returns as not final.
 - **Negative prices** (WTI at −37.63 on 2020-04-20) make log returns undefined. Flag them and handle them explicitly, never with a silent `NaN`/`inf`.
+- **News is live-only.** Feeds carry recent items only, so news can never be used in backtests or walk-forward features.
+- **FRED uses first-release values** (`output_type=4`); EIA values are the latest revision, which is a known and minor revision risk.
 - **No full-sample statistics** (scalers, z-scores, percentiles, seasonal bands) inside a walk-forward fold. Fit on the training window only.
 - **Purge ≥ the longest horizon, plus an embargo** (enforced by `ForecastingConfig`).
 - **A test that deliberately leaks future data must fail** (Phase 3).
@@ -71,7 +93,7 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | Phase | Scope | Acceptance |
 |---|---|---|
 | 0 ✅ | Scaffold, config, CLI, CLAUDE.md, leakage-auditor | `uv run pytest` green; `uv run fa --help` works |
-| 1 | Providers (yfinance, EIA, CFTC, FRED, RSS), cache, quality checks (gaps, rolls, negative prices, stale data) | 10 years of `CL=F` fetched twice; the second run hits the cache only; tests use fixtures |
+| 1 ✅ | Providers (yfinance, EIA, CFTC, FRED, RSS), cache, quality checks (gaps, rolls, negative prices, stale data) | 10 years of `CL=F` fetched twice; the second run hits the cache only; tests use fixtures |
 | 2 | Indicators, supply/demand, curve, seasonality, risk metrics | Reference-value tests; `fa analyze CL=F --no-llm` prints a snapshot |
 | 3 | Model ladder, walk-forward, leaderboard | `fa forecast CL=F` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
 | 4 | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |

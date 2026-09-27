@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<?xml-stylesheet href="rss.xsl" type="text/xsl" media="screen"?>
+<rss version="2.0">
+	<channel>
+		<title>Today in Energy</title>
+		<link>http://www.eia.gov/todayinenergy</link>
+		<description>Short, timely articles with graphics on energy facts, issues, and trends.</description>
+		<language>en-us</language>
+		<lastBuildDate>Fri, 25 Sep 2026 09:00:00 EST</lastBuildDate>
+		<webMaster>wmaster@eia.gov</webMaster>
+
+		<image>
+		<title>EIA logo</title>
+		<url>http://www.eia.gov/global/images/logos/eia_logo_250.png</url>
+		<link>http://www.eia.gov/</link>
+		<description>U.S. Energy Information Administration</description>
+		</image>
+		
+		<item>
+		<title>Henry Hub natural gas prices this summer were 6% lower than last summer</title>
+		<link>https://www.eia.gov/todayinenergy/detail.php?id=68204</link>
+		<pubDate>Fri, 25 Sep 2026  09:00:00 EST</pubDate>
+		<description>The Henry Hub natural gas spot price averaged $2.93 per million British thermal units from June through August, 6% less than the same period last year. Prices were lower this summer despite exceptionally hot weather that increased electricity demand for air conditioning. Natural gas-fired power plants often help meet higher demand during such periods.</description>
+		</item><item>
+		<title>Public companies produce most U.S. crude oil and natural gas</title>
+		<link>https://www.eia.gov/todayinenergy/detail.php?id=68184</link>
+		<pubDate>Tue, 22 Sep 2026  09:00:00 EST</pubDate>
+		<description>Publicly traded companies represent a tiny share of the total number of companies producing crude oil and natural gas in the United States, but they make up a large share of U.S. production. In 2025, publicly traded companies accounted for just 2% of about 12,000 oil and natural gas producers but produced 68% of the crude oil and natural gas in the Lower 48 states.</description>
+		</item><item>
+		<title>What goes into diesel prices?</title>
+		<link>https://www.eia.gov/todayinenergy/detail.php?id=68164</link>
+		<pubDate>Fri, 18 Sep 2026  09:00:00 EST</pubDate>
+		<description>The price of distillate fuel oil, often sold as diesel, is driven by the price of crude oil, retail margins, distribution costs, taxes, and crack spreads, the indicator we use for refining margins. Tight global supplies of distillate fuel oil and elevated crude oil prices have driven prices higher in recent months.</description>
+		</item><item>
+		<title>Corpus Christi LNG expansion makes facility the second-largest in the United States</title>
+		<link>https://www.eia.gov/todayinenergy/detail.php?id=68144</link>
+		<pubDate>Tue, 15 Sep 2026  09:00:00 EST</pubDate>
+		<description>On August 28, 2026, Cheniere Energy, Inc., completed its Corpus Christi Liquefaction Stage 3 Project (CCL Stage 3) in Texas, taking custody and control of the seventh and last liquefied natural gas (LNG) train in the project.</description>
+		</item></channel></rss>

@@ -1,0 +1,62 @@
+[
+ {
+  "report_date_as_yyyy_mm_dd": "2026-09-01T00:00:00.000",
+  "open_interest_all": "1921085",
+  "prod_merc_positions_long": "645739",
+  "prod_merc_positions_short": "336337",
+  "swap_positions_long_all": "110782",
+  "swap__positions_short_all": "576189",
+  "m_money_positions_long_all": "205300",
+  "m_money_positions_short_all": "111019",
+  "m_money_positions_spread": "295613",
+  "other_rept_positions_long": "127148",
+  "other_rept_positions_short": "91518",
+  "nonrept_positions_long_all": "76748",
+  "nonrept_positions_short_all": "50654"
+ },
+ {
+  "report_date_as_yyyy_mm_dd": "2026-09-08T00:00:00.000",
+  "open_interest_all": "1939911",
+  "prod_merc_positions_long": "655691",
+  "prod_merc_positions_short": "346775",
+  "swap_positions_long_all": "110812",
+  "swap__positions_short_all": "585913",
+  "m_money_positions_long_all": "218960",
+  "m_money_positions_short_all": "107229",
+  "m_money_positions_spread": "284214",
+  "other_rept_positions_long": "131158",
+  "other_rept_positions_short": "106310",
+  "nonrept_positions_long_all": "86874",
+  "nonrept_positions_short_all": "57268"
+ },
+ {
+  "report_date_as_yyyy_mm_dd": "2026-09-15T00:00:00.000",
+  "open_interest_all": "1955764",
+  "prod_merc_positions_long": "643221",
+  "prod_merc_positions_short": "335812",
+  "swap_positions_long_all": "118240",
+  "swap__positions_short_all": "590507",
+  "m_money_positions_long_all": "221896",
+  "m_money_positions_short_all": "115617",
+  "m_money_positions_spread": "298939",
+  "other_rept_positions_long": "149306",
+  "other_rept_positions_short": "119680",
+  "nonrept_positions_long_all": "84298",
+  "nonrept_positions_short_all": "55345"
+ },
+ {
+  "report_date_as_yyyy_mm_dd": "2026-09-22T00:00:00.000",
+  "open_interest_all": "1841811",
+  "prod_merc_positions_long": "607458",
+  "prod_merc_positions_short": "304558",
+  "swap_positions_long_all": "111924",
+  "swap__positions_short_all": "584713",
+  "m_money_positions_long_all": "223190",
+  "m_money_positions_short_all": "121362",
+  "m_money_positions_spread": "276269",
+  "other_rept_positions_long": "137620",
+  "other_rept_positions_short": "98342",
+  "nonrept_positions_long_all": "76346",
+  "nonrept_positions_short_all": "47563"
+ }
+]

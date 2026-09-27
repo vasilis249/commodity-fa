@@ -1,0 +1,115 @@
+{
+ "response": {
+  "total": 2295,
+  "dateFormat": "YYYY-MM-DD",
+  "frequency": "weekly",
+  "data": [
+   {
+    "period": "2026-09-18",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 426398,
+    "units": "MBBL"
+   },
+   {
+    "period": "2026-09-11",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 423429,
+    "units": "MBBL"
+   },
+   {
+    "period": "2026-09-04",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 424069,
+    "units": "MBBL"
+   },
+   {
+    "period": "2026-08-28",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 424460,
+    "units": "MBBL"
+   },
+   {
+    "period": "2026-08-21",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 428910,
+    "units": "MBBL"
+   },
+   {
+    "period": "2026-08-14",
+    "duoarea": "NUS",
+    "area-name": "U.S.",
+    "product": "EPC0",
+    "product-name": "Crude Oil",
+    "process": "SAX",
+    "process-name": "Ending Stocks Excluding SPR",
+    "series": "WCESTUS1",
+    "series-description": "U.S. Ending Stocks excluding SPR of Crude Oil (Thousand Barrels)",
+    "value": 428815,
+    "units": "MBBL"
+   }
+  ],
+  "description": "EIA petroleum gas survey data",
+  "id": "petroleum"
+ },
+ "request": {
+  "command": "/v2/seriesid/PET.WCESTUS1.W",
+  "params": {
+   "frequency": "weekly",
+   "data": [
+    "value"
+   ],
+   "facets": {
+    "series": [
+     "WCESTUS1"
+    ]
+   },
+   "start": null,
+   "end": null,
+   "sort": [
+    {
+     "column": "period",
+     "direction": "desc"
+    }
+   ],
+   "offset": 0,
+   "length": 6
+  },
+  "route": "petroleum/sum/sndw"
+ },
+ "ExcelAddInVersion": "2.1.0"
+}
