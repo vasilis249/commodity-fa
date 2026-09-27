@@ -18,6 +18,10 @@ uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
 uv run fa forecast CL=F [--models naive,lightgbm] [--folds N] [--refresh] [--json]
 uv run fa report CL=F [--as-of D] [--rounds N] [--budget USD]   # agents; needs ANTHROPIC_API_KEY
 uv run fa backtest CL=F [-s sma|forecast|agent] [--offline] [--yes] [--json]   # paper backtest vs buy-and-hold
+uv run fa ask "question" -s CL=F [--as-of D]   # research agent, one question
+uv run fa eval [--solver llm|reference] [--only ids|categories] [--yes] [--freeze]
+uv run fa doctor [--no-network]    # setup check for new users
+make schemas                       # regenerate schema snapshots after an intentional change
 uv run streamlit run app/main.py   # dashboard (or `make app`); FA_CONFIG_DIR=<dir>/config for another workspace
 uv run fa data cache                                                     # list cache entries
 uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
@@ -136,6 +140,13 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - LLM runs from the UI need a key, a cost-confirmation tick and respect the same hard budgets (`max_usd_per_run`, `max_usd_backtest`). Keys are shown only as set/missing.
 - Tests: `tests/integration/test_app.py` runs every page headless with `streamlit.testing.v1.AppTest` (monkeypatch `fa.ui.common.get_workspace`). Streamlit only hot-reloads files next to `app/main.py`; restart the server after editing `fa/`.
 
+## Research loop and evals (Phase 7)
+- `fa/orchestration/research_loop.py`: `ask()` runs `research_agent` (prompt `prompts/research_agent.md`, tools listed in `config/agents.yaml`) through plan → tool calls → **code verification** → answer. `verify()` checks every number in the text and the headline `value` against the results it cites (`value` is rendered as a cited claim, e.g. `0.809118 [T2]`). Failures go back to the agent up to `validator_max_loops`; after that the value is set to None and unsupported sentences are removed. **An unverified value is never returned.**
+- `fa/evals.py` + `evals/questions.jsonl`: every question has a frozen `expect` and a `ref` (a tool and a path like `inventories[name=cushing_stocks].dev_pct`, or a compare). The reference solver must score 100%. `fa eval --freeze` rewrites the frozen values; review the diff before committing. Scoring is code: a number within tolerance (percent accepted for fractions), exact choice, or a decline for unanswerable questions. A question whose reference data can't be fetched is **skipped**, not scored. `tests/integration/test_eval_sources.py` (network) re-derives a sample from raw providers.
+- New questions: pick a past `as_of` with released data, add a `ref`, run `fa eval --freeze`, then `fa eval --solver reference`. Keep at least 3 unanswerable questions, and prefer point-in-time traps such as `cot-04`.
+- Schema regression: `tests/fixtures/schemas/*.json` snapshot every saved-output model (`scripts/update_schemas.py`). `tests/fixtures/report_v1.json` must keep loading and rendering. Bump `SCHEMA_VERSION` in `fa/reports/schema.py` when the report changes.
+- Hardening: `tests/integration/test_secrets.py` scans every artifact, CLI output, provider error and retry log for fake keys. Tool errors carry the real cause (e.g. an EIA rate limit), not a generic message. CI (`.github/workflows/ci.yml`) runs lint, mypy and the offline tests on every push.
+
 ## Conventions
 - Python 3.12, `uv`, `ruff` (line length 100), lenient `mypy`, `pytest`.
 - Small, readable modules. Add a dependency only when its phase needs it, and say why.
@@ -158,4 +169,4 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | 4 ✅ | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
 | 5 ✅ | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
 | 6 ✅ | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |
-| 7 | Eval set (~30 verifiable questions), schema regression, README | Eval score reported; setup takes under 10 minutes |
+| 7 ✅ | Eval set (~30 verifiable questions), schema regression, README | Eval score reported; setup takes under 10 minutes |

@@ -182,7 +182,12 @@ def tolerance(e: Expect) -> float:
         return e.tol
     assert isinstance(e.value, int | float)
     floor = 0.0006 if e.percent else 0.006  # rounding to 0.1 pp, or to 2 decimals
-    return max(0.005 * abs(float(e.value)), floor)
+    return max(0.001 * abs(float(e.value)), floor)
+
+
+def _written_decimals(x: float) -> int:
+    t = repr(x)
+    return len(t.split(".")[1]) if "." in t and "e" not in t else 0
 
 
 def _norm(s: str) -> str:
@@ -202,9 +207,11 @@ def score(q: Question, ans: ResearchAnswer | None) -> tuple[bool, str]:
         if ans.value is None:
             return False, "no (verified) value"
         exp, tol = float(e.value), tolerance(e)  # type: ignore[arg-type]
-        cands = [ans.value] + ([ans.value / 100] if e.percent else [])
-        best = min(abs(c - exp) for c in cands)
-        return best <= tol, f"got {ans.value:g}, expected {exp:g} ± {tol:.3g}"
+        # rounding as written is fine ("17.4" for 17.4194), a different number is not
+        rounding = 0.5 * 10.0 ** -_written_decimals(ans.value)
+        cands = [(ans.value, rounding)] + ([(ans.value / 100, rounding / 100)] if e.percent else [])
+        ok = any(abs(c - exp) <= max(tol, r) for c, r in cands)
+        return ok, f"got {ans.value:g}, expected {exp:g} ± {tol:.3g}"
     want = _norm(str(e.value))
     got = _norm(ans.choice or "")
     if not got:  # fall back to a single option named in the text

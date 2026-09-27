@@ -56,6 +56,34 @@ def value_text(ans: ResearchAnswer) -> str | None:
     return f"{ans.value!r}{'%' if pct else ''} [{cites}]"
 
 
+def _leaves(payload: Any) -> list[float]:
+    if isinstance(payload, bool):
+        return []
+    if isinstance(payload, int | float):
+        return [float(payload)]
+    if isinstance(payload, dict):
+        return [x for k, v in payload.items() if k != "result_id" for x in _leaves(v)]
+    if isinstance(payload, list):
+        return [x for v in payload for x in _leaves(v)]
+    return []
+
+
+def signed_match(ans: ResearchAnswer, results: dict[str, Any]) -> bool:
+    """The value equals a cited number, sign included, after rounding to the precision
+    written (the text checker is sign-agnostic by design: "fell 13.9%")."""
+    if ans.value is None:
+        return True
+    text = repr(ans.value)
+    decimals = len(text.split(".")[1]) if "." in text and "e" not in text else 0
+    tol = 0.5 * 10.0**-decimals + 1e-12
+    pct = (ans.unit or "").strip().lower() in PERCENT_UNITS
+    for rid in ans.citations:
+        for x in _leaves(results.get(rid)):
+            if any(abs(c - ans.value) <= tol for c in ([x, x * 100] if pct else [x])):
+                return True
+    return False
+
+
 def verify(ans: ResearchAnswer, results: dict[str, Any]) -> list[str]:
     """Violations: unsupported numbers in the text, an unsupported value, bad citations."""
     text_fields = ans.model_dump(mode="json", exclude={"value", "citations", "unit"})
@@ -63,7 +91,7 @@ def verify(ans: ResearchAnswer, results: dict[str, Any]) -> list[str]:
     vt = value_text(ans)
     if vt is not None:
         bad = check_text(vt, results)
-        if bad or not ans.citations:
+        if bad or not ans.citations or not signed_match(ans, results):
             problems.append(f"value {ans.value!r} is not in the cited results {ans.citations}")
     for rid in ans.citations:
         payload = results.get(rid)

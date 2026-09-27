@@ -76,9 +76,18 @@ def test_number_scoring_and_percent() -> None:
     assert not score(q, _ans(value=None))[0]
 
 
+def test_rounding_as_written_but_not_a_neighbouring_number() -> None:
+    sma = _q(Expect(type="number", value=64.232))
+    assert score(sma, _ans(value=64.23))[0]
+    assert not score(sma, _ans(value=64.39))[0]  # the close, not the SMA
+    pctile = _q(Expect(type="number", value=17.4194))
+    assert score(pctile, _ans(value=17.4))[0]
+    assert not score(pctile, _ans(value=17.6))[0]
+
+
 def test_tolerance_rules() -> None:
     assert tolerance(Expect(type="number", value=0.01, percent=True)) == 0.0006
-    assert tolerance(Expect(type="number", value=92.16)) == pytest.approx(0.4608)
+    assert tolerance(Expect(type="number", value=92.16)) == pytest.approx(0.09216)
     assert tolerance(Expect(type="number", value=0.5)) == 0.006
     assert tolerance(Expect(type="number", value=5.0, tol=0.1)) == 0.1
 
@@ -107,3 +116,22 @@ def test_extract_paths() -> None:
     assert extract(p, "h[q=0.9].p") == 5
     with pytest.raises(StopIteration):
         extract(p, "a[n=z].v")
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "ok"),
+    [
+        (-37.63, None, True),
+        (37.63, None, False),  # sign flipped: the text checker alone would accept it
+        (-13.9, "%", True),
+        (13.9, "%", False),
+        (-0.14, None, True),  # rounded as written
+        (12.5, None, False),  # not in the result at all
+    ],
+)
+def test_headline_value_is_sign_strict(value, unit, ok) -> None:
+    from fa.orchestration.research_loop import verify
+
+    results = {"T1": {"result_id": "T1", "price": {"last_close": -37.63, "change_20d": -0.139127}}}
+    ans = _ans(value=value, unit=unit, answer="x")
+    assert (not verify(ans, results)) is ok
