@@ -5,7 +5,7 @@ A local research tool for **energy-commodity analysis and probabilistic price fo
 > Research and learning only. Paper trading only: no broker connections and no order execution. **Not investment advice.**
 
 ## Status
-Phases 0–5 are done: scaffold, data layer, analytics, forecasting, agents and the paper backtester. See `CLAUDE.md` for the roadmap and conventions.
+Phases 0–6 are done: scaffold, data layer, analytics, forecasting, agents, the paper backtester and the dashboard. See `CLAUDE.md` for the roadmap and conventions.
 
 ## Quick start
 ```bash
@@ -25,6 +25,7 @@ uv run fa analyze CL=F --no-llm       # numeric snapshot (technicals, risk, inve
 uv run fa forecast CL=F               # 1/5/20-day P10/P50/P90 + P(up), with measured skill vs a random walk
 uv run fa report CL=F                 # full agent report (needs ANTHROPIC_API_KEY): reports/CL_F_<date>.md/.html/.json
 uv run fa backtest CL=F -s sma        # paper backtest vs buy-and-hold, with costs (also: -s forecast, -s agent)
+uv run streamlit run app/main.py      # dashboard at http://localhost:8501 (or: make app)
 uv run pytest -m network              # live acceptance test (needs internet)
 ```
 
@@ -51,3 +52,12 @@ Paper only; nothing here can place an order. Targets are decided at the close an
 - `-s sma`: 50/200-day moving-average crossover (long-only by default; `config/backtest.yaml`).
 - `-s forecast`: goes long when the walk-forward P(up) at 5 days is at least 0.55. Thresholds are fixed in config, not tuned on the backtest.
 - `-s agent`: the analysts decide every 20 sessions on **anonymized** data: prices rebased to 100, no names, dates, units, news or macro. This fights the LLM's memory of what happened next. It asks for `--yes` when the estimated cost exceeds `max_usd_backtest` ($5 by default), which is also a hard cap.
+
+## Dashboard (`uv run streamlit run app/main.py`)
+Opens at http://localhost:8501. Pick an instrument in the sidebar (type to search, or enter any Yahoo ticker such as `SPY`), or switch on **Offline** to use only cached data.
+- **Market:** candlesticks of the quoted front month, the roll-adjusted close, 50/200-day averages, contract rolls, volume, data-quality flags and the point-in-time snapshot (technicals, risk, inventories, positioning, crack spread, curve).
+- **Forecast:** 1/5/20-day fan chart from the last close. Each horizon's out-of-sample skill vs a random walk is printed under the chart and in the table beside it, with the full leaderboard. The first run for an instrument takes about a minute; later runs use the cache.
+- **Leaderboards:** every cached evaluation across instruments, with the best model per horizon and whether it has a significant edge.
+- **Reports:** saved agent reports with the rating, how the code computed it, the forecast, each analyst's view, bull vs bear, risks and validation. **Trace a citation** shows the exact tool result behind any `[T#]`. You can also run a new report here: it needs `ANTHROPIC_API_KEY` and a cost confirmation, within the hard budget.
+- **Backtest:** run SMA, forecast or agent strategies vs buy-and-hold, with the equity curve, drawdowns, positions and the edge test. Saved runs are listed.
+- **Run history:** every agent run's scratchpad, with each tool call, LLM call, check and error, and cost by agent.

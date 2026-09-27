@@ -18,6 +18,8 @@ dependencies = [
     "lightgbm>=4.3",
     "scipy>=1.13",
     "anthropic>=1.0",
+    "streamlit>=1.40",
+    "plotly>=5.24",
 ]
 
 [project.optional-dependencies]

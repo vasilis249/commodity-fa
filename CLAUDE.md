@@ -18,6 +18,7 @@ uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
 uv run fa forecast CL=F [--models naive,lightgbm] [--folds N] [--refresh] [--json]
 uv run fa report CL=F [--as-of D] [--rounds N] [--budget USD]   # agents; needs ANTHROPIC_API_KEY
 uv run fa backtest CL=F [-s sma|forecast|agent] [--offline] [--yes] [--json]   # paper backtest vs buy-and-hold
+uv run streamlit run app/main.py   # dashboard (or `make app`); FA_CONFIG_DIR=<dir>/config for another workspace
 uv run fa data cache                                                     # list cache entries
 uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
 ```
@@ -127,6 +128,14 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - **Agent backtests** (`fa/backtest/agent_signal.py`, `anonymize.py`, `prompts/anon/`): every `rebalance_every` sessions (the last `max_decisions`), the analysts run on **anonymized** tools built from an allow-list: prices rebased to 100 at the first decision, inventories only as ratios and band positions, COT as a share and percentile, and no news, macro, dates, names, units or sources. The forecast only counts when its skill on forecasts **settled before t** (label end + embargo ≤ t) is significant. Every anonymized tool returns the same shape for every asset (nulls with `available: false`, never errors). Inventory slots are labelled by kind (stocks, supply, processing rate). Rebasing uses the last positive close at or before the first decision and fails closed. Notes and params record the model ids, and how many decisions fall before each model's `training_cutoff` (`models.yaml`; unset means all of them are at risk). The rating is computed by `decide()` and mapped to a weight (long-only clips at 0). Cost: `decisions × est_usd_per_decision` must fit `models.budget.max_usd_backtest` unless `--yes`, and a shared `CostTracker` hard-caps the whole run. Residual risk: the price path's shape can still reveal the episode.
 - Results are written to `backtests/<SYM>_<strategy>_<end>.{json,csv}` (git-ignored).
 
+## Dashboard (Phase 6)
+- Layers: `app/main.py` (launcher) → `fa/ui/` (Streamlit pages, sidebar, caching) → `fa/api.py` (UI-agnostic service facade, ready for an HTTP API) and `fa/charts.py` (pure Plotly builders). **Pages never call the data, forecasting or agent layers directly**; they go through `fa.api`.
+- `fa.api.Workspace` holds the config, the artifact dirs (reports, `.runs`, backtests, leaderboards, all relative to the config dir's parent) and a `service_factory`, so tests inject offline fixtures. `FA_CONFIG_DIR` selects another workspace.
+- Pages: Market (candles, roll-adjusted close, SMAs, roll markers, snapshot tabs), Forecast (fan chart + skill table + leaderboard), Leaderboards (all cached evaluations), Reports (browse, trace any `[T#]` to its logged payload, run a new one), Backtest (run/saved, equity + drawdown + position), Run history (scratchpads: events, cost by agent).
+- **Guardrail:** `fan_chart` takes whole `HorizonForecast`s and draws each horizon's skill line (`skill_caption`) inside the figure; `show_forecast` always pairs it with the skill table and a "No measurable edge" banner when no model has an edge. Tested in `tests/unit/test_charts.py` and `tests/integration/test_app.py`.
+- LLM runs from the UI need a key, a cost-confirmation tick and respect the same hard budgets (`max_usd_per_run`, `max_usd_backtest`). Keys are shown only as set/missing.
+- Tests: `tests/integration/test_app.py` runs every page headless with `streamlit.testing.v1.AppTest` (monkeypatch `fa.ui.common.get_workspace`). Streamlit only hot-reloads files next to `app/main.py`; restart the server after editing `fa/`.
+
 ## Conventions
 - Python 3.12, `uv`, `ruff` (line length 100), lenient `mypy`, `pytest`.
 - Small, readable modules. Add a dependency only when its phase needs it, and say why.
@@ -148,5 +157,5 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | 3 ✅ | Model ladder, walk-forward, leaderboard | `fa forecast CL=F`/`SPY` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
 | 4 ✅ | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
 | 5 ✅ | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
-| 6 | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |
+| 6 ✅ | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |
 | 7 | Eval set (~30 verifiable questions), schema regression, README | Eval score reported; setup takes under 10 minutes |

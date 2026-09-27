@@ -1,4 +1,4 @@
-.PHONY: install test lint fmt typecheck check
+.PHONY: install test lint fmt typecheck check app
 
 install:
 	uv sync
@@ -18,3 +18,6 @@ typecheck:
 	uv run mypy fa
 
 check: lint typecheck test
+
+app:
+	uv run streamlit run app/main.py

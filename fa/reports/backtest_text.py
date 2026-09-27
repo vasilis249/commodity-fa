@@ -33,7 +33,7 @@ ROWS: list[tuple[str, str]] = [
 PCT = {"total_return", "cagr", "vol", "max_drawdown", "hit_rate", "exposure", "costs_paid"}
 
 
-def _cell(m: Metrics, key: str) -> str:
+def cell(m: Metrics, key: str) -> str:
     v = getattr(m, key)
     if key == "trades":
         return str(v)
@@ -50,7 +50,7 @@ def render(r: BacktestReport) -> str:
         "",
         f"  {'':<16}{r.strategy:>14}{'buy & hold':>14}",
     ]
-    lines += [f"  {label:<16}{_cell(s, k):>14}{_cell(b, k):>14}" for label, k in ROWS]
+    lines += [f"  {label:<16}{cell(s, k):>14}{cell(b, k):>14}" for label, k in ROWS]
     ci = s.sharpe_ci95
     if ci:
         lines.append(f"  Sharpe 95% CI   [{ci[0]:+.2f}, {ci[1]:+.2f}] (strategy)")
