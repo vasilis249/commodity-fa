@@ -192,7 +192,8 @@ class DataConfig(_Strict):
 class WalkForward(_Strict):
     min_train_days: int = Field(gt=0)
     step_days: int = Field(gt=0)
-    purge_days: int = Field(ge=0)
+    # No purge_days: Dataset.until() drops every label that needs prices after the
+    # training cut, which purges overlapping labels by construction.
     embargo_days: int = Field(ge=0)
     max_folds: int = Field(gt=0)
     eval_stride: int = Field(gt=0)
@@ -265,10 +266,7 @@ class ForecastingConfig(_Strict):
         return v
 
     @model_validator(mode="after")
-    def _purge_covers_horizon(self) -> ForecastingConfig:
-        # Labels overlap up to the longest horizon; a shorter purge leaks future returns.
-        if self.walk_forward.purge_days < max(self.horizons):
-            raise ValueError("walk_forward.purge_days must be >= the longest horizon")
+    def _baseline_known(self) -> ForecastingConfig:
         if 0.5 not in self.quantiles:
             raise ValueError("quantiles must include the median (0.5)")
         if self.skill.baseline not in self.models:
@@ -391,6 +389,14 @@ class AppConfig(_Strict):
 
     @model_validator(mode="after")
     def _cross_file_checks(self) -> AppConfig:
+        # labels use the volume-detected roll mask, which looks up to
+        # window_before + window_after sessions ahead: the embargo must cover that
+        hindsight = self.data.rolls.window_before + self.data.rolls.window_after
+        if self.forecasting.walk_forward.embargo_days < hindsight:
+            raise ValueError(
+                f"walk_forward.embargo_days must be >= {hindsight} "
+                "(roll-mask hindsight: rolls.window_before + rolls.window_after)"
+            )
         missing = set(self.agents.agents) - set(self.models.agent_roles)
         if missing:
             raise ValueError(f"agents without a model role in models.yaml: {sorted(missing)}")

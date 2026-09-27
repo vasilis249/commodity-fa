@@ -7,8 +7,10 @@ interval_coverage_target: 0.8
 walk_forward:
   min_train_days: 756           # ~3 years before the first forecast
   step_days: 20                 # refit cadence (= test block length)
-  purge_days: 20                # >= max horizon, so overlapping labels never leak
-  embargo_days: 5               # extra gap between the last training label and the test block
+  # Overlapping labels are purged by construction: a training view cut at row c only has
+  # labels with t + h <= c. The embargo is an extra gap, and must cover the roll-mask
+  # hindsight (rolls.window_before + window_after), which config validation enforces.
+  embargo_days: 5
   max_folds: 30                 # most recent folds evaluated
   eval_stride: 5                # forecast origins every N sessions inside a test block
   refit_every: 3                # refit models every N folds; between refits the latest fit

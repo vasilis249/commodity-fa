@@ -64,13 +64,15 @@ def price_features(
     for n in (20, 50, 200):
         f[f"dist_sma{n}"] = level / ind.sma(level, n) - 1
     f["dd_252"] = level / level.rolling(252, min_periods=60).max() - 1
+    # High, low and volume of a daily bar may include trading after the settlement that
+    # defines the close (and the decision time), so these features use the previous bar.
     close = prices["close"].astype(float)
     day_range = ((prices["high"] - prices["low"]) / close).where((close > 0) & ~in_window)
-    f["range_pct_14"] = day_range.rolling(14, min_periods=8).mean()
+    f["range_pct_14"] = day_range.rolling(14, min_periods=8).mean().shift(1)
     if "volume" in prices:
         logv = np.log(prices["volume"].astype(float).where(lambda v: v > 0)).where(~in_window)
         mean, sd = logv.rolling(20, min_periods=12).mean(), logv.rolling(20, min_periods=12).std()
-        f["volume_z20"] = (logv - mean) / sd
+        f["volume_z20"] = ((logv - mean) / sd).shift(1)
     f["dow"] = prices.index.dayofweek
     f["month_sin"] = np.sin(2 * np.pi * prices.index.month / 12)
     f["month_cos"] = np.cos(2 * np.pi * prices.index.month / 12)

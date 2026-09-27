@@ -6,11 +6,15 @@ where t + h <= s - 1 - embargo, so no training label overlaps the test block.
 Forecast origins are every `eval_stride`-th session (aligned globally).
 
 Skill: a model has an edge at horizon h only if its pinball loss beats the naive random
-walk on the same origins, with a one-sided Diebold-Mariano test (Newey-West variance
-for overlapping horizons) whose Holm-adjusted p-value (across the models compared at
-that horizon) is below `significance_alpha`. Without the correction, trying 5-6
+walk on the same origins, with a one-sided batch-means Diebold-Mariano test (blocks =
+origins served by one fitted model, which absorbs label overlap and per-fit bias) whose
+Holm-adjusted p-value (across every model x horizon test) is below
+`significance_alpha`. Without the correction, trying 5-6
 models per horizon would "find" an edge in a pure random walk far too often.
-Directional accuracy is tested with a binomial test on non-overlapping origins only.
+Directional accuracy is tested with a binomial test on non-overlapping origins only,
+against the best constant call (not 50%, which flatters "always up" in a trend).
+`auto_select` re-picks the best model on earlier folds only; its row is the honest
+out-of-sample score of "use whichever model leads the leaderboard".
 """
 
 from __future__ import annotations
@@ -30,6 +34,8 @@ from fa.forecasting.dataset import Dataset
 
 ModelFactory = Callable[[], ForecastModel]
 ENSEMBLE = "ensemble"
+AUTO_SELECT = "auto_select"  # model picked on earlier folds only, per fold
+MIN_BLOCKS = 4  # fewest batch means for a DM test
 
 
 @dataclass(frozen=True)
@@ -67,20 +73,35 @@ def mean_pinball(y: np.ndarray, frame: pd.DataFrame, quantiles: Sequence[float])
     return np.mean(losses, axis=0)
 
 
-def diebold_mariano(d: np.ndarray, lag: int) -> float:
-    """One-sided p-value that mean(d) < 0 (model loss below baseline), NW variance."""
+def diebold_mariano(d: np.ndarray, block: int) -> float:
+    """One-sided p-value that mean(d) < 0 (model loss below the baseline's).
+
+    Batch-means Diebold-Mariano: the loss differences (in time order) are averaged
+    within consecutive blocks of `block` origins, and the block means get a t-test
+    with (blocks - 1) degrees of freedom. Choosing `block` = the origins served by one
+    fitted model absorbs both label overlap and per-fit bias. Monte Carlo (MA(3) +
+    GARCH + block bias): size 4.5-6.4% at a nominal 5%; Newey-West/Bartlett gave
+    up to 10%.
+    """
     d = d[np.isfinite(d)]
-    n = len(d)
-    if n < 8:
+    nb = len(d) // max(block, 1)
+    if nb < MIN_BLOCKS:
+        block = len(d) // MIN_BLOCKS
+        nb = MIN_BLOCKS if block > 0 else 0
+    if nb < MIN_BLOCKS:
         return float("nan")
-    dc = d - d.mean()
-    var = dc @ dc / n
-    for k in range(1, min(lag, n - 1) + 1):
-        w = 1 - k / (lag + 1)
-        var += 2 * w * (dc[k:] @ dc[:-k]) / n
-    if var <= 0:
+    means = d[: nb * block].reshape(nb, block).mean(axis=1)
+    sd = means.std(ddof=1)
+    if not sd > 0:
         return float("nan")
-    return float(stats.norm.cdf(d.mean() / math.sqrt(var / n)))
+    return float(stats.t.cdf(means.mean() / (sd / math.sqrt(nb)), df=nb - 1))
+
+
+def dm_block(h: int, cfg: ForecastingConfig) -> int:
+    """Origins per block: those served by one fitted model, and at least the overlap."""
+    wf = cfg.walk_forward
+    per_fold = math.ceil(wf.step_days / wf.eval_stride)
+    return max(math.ceil(h / wf.eval_stride), wf.refit_every * per_fold)
 
 
 def non_overlapping(dates: pd.DatetimeIndex, positions: np.ndarray, h: int) -> np.ndarray:
@@ -104,10 +125,10 @@ class LeaderRow(FiniteModel):
     skill: float | None  # 1 - pinball / naive pinball
     coverage: float | None  # share inside the outermost quantiles (target in config)
     dir_acc: float | None
-    dir_p: float | None  # binomial, non-overlapping origins
+    dir_p: float | None  # binomial vs the best constant call, non-overlapping origins
     brier: float | None
     dm_p: float | None  # Diebold-Mariano vs naive, one-sided
-    dm_p_adj: float | None  # Holm-adjusted across models at this horizon
+    dm_p_adj: float | None  # Holm-adjusted across all (model, horizon) tests
     edge: bool
 
 
@@ -149,45 +170,61 @@ def walk_forward(
     origin_pos = np.concatenate([np.asarray(f.origins) for f in folds])
     fold_ids = np.asarray(fold_of)
     realized = {h: ds.label(h).iloc[origin_pos] for h in ds.horizons}
+    cutoffs = {f.k: f.train_end for f in folds}  # labels usable at fold k end here
 
     weights: dict[int, dict[str, float]] = {}
-    if (
-        cfg.models.get(ENSEMBLE, None) is not None
-        and cfg.models[ENSEMBLE].enabled
-        and len(factories) > 1
-    ):
-        ens, weights = _ensemble(stacked, realized, fold_ids, cfg)
-        stacked[ENSEMBLE] = ens
+    members = list(stacked)
+    if len(members) > 1:
+        if cfg.models.get(ENSEMBLE) is not None and cfg.models[ENSEMBLE].enabled:
+            ens, weights = _combined(
+                stacked, members, realized, origin_pos, fold_ids, cutoffs, cfg, _inverse_loss
+            )
+            stacked[ENSEMBLE] = ens
+        # "pick the best model so far" as its own out-of-sample stream: the honest
+        # measure of choosing a model from a leaderboard (no winner's curse)
+        sel, _ = _combined(
+            stacked, members, realized, origin_pos, fold_ids, cutoffs, cfg, _best_only
+        )
+        stacked[AUTO_SELECT] = sel
 
     positions = {h: origin_pos for h in ds.horizons}
     board = _leaderboard(stacked, realized, positions, ds, cfg)
     return EvalResult(stacked, realized, positions, board, weights, folds)
 
 
-def _ensemble(
+WeightRule = Callable[[dict[str, float], ForecastingConfig], dict[str, float]]
+
+
+def _combined(
     preds: dict[str, dict[int, pd.DataFrame]],
+    members: list[str],
     realized: dict[int, pd.Series],
+    origin_pos: np.ndarray,
     fold_ids: np.ndarray,
+    cutoffs: dict[int, int],
     cfg: ForecastingConfig,
+    rule: WeightRule,
 ) -> tuple[dict[int, pd.DataFrame], dict[int, dict[str, float]]]:
-    """Weights per horizon = inverse mean pinball on earlier folds only (causal)."""
+    """Blend members per fold with weights from losses whose labels were already
+    fully observed when the fold's training data ends (origin + h <= train_end)."""
     qs = cfg.quantiles
-    names = list(preds)
     out: dict[int, pd.DataFrame] = {}
     final: dict[int, dict[str, float]] = {}
     for h, y in realized.items():
         yv = y.to_numpy()
-        losses = {m: mean_pinball(yv, preds[m][h], qs) for m in names}
-        cols = list(preds[names[0]][h].columns)
-        arr = np.stack([preds[m][h][cols].to_numpy(dtype=float) for m in names])  # (M, N, C)
+        losses = {m: mean_pinball(yv, preds[m][h], qs) for m in members}
+        cols = list(preds[members[0]][h].columns)
+        arr = np.stack([preds[m][h][cols].to_numpy(dtype=float) for m in members])  # (M, N, C)
         blended = np.full(arr.shape[1:], np.nan)
         for k in np.unique(fold_ids):
+            usable = (origin_pos + h <= cutoffs[int(k)]) & np.isfinite(yv)
+            w = rule(_past_losses(losses, fold_ids, usable, cfg), cfg)
             now = fold_ids == k
-            w = _weights(losses, fold_ids, int(k), cfg)
-            blended[now] = combine(arr[:, now, :], np.array([w[m] for m in names]))
-        frame = pd.DataFrame(blended, index=preds[names[0]][h].index, columns=cols)
+            blended[now] = combine(arr[:, now, :], np.array([w[m] for m in members]))
+        frame = pd.DataFrame(blended, index=preds[members[0]][h].index, columns=cols)
         out[h] = sort_quantiles(frame, qs)
-        final[h] = _weights(losses, fold_ids, int(fold_ids.max()) + 1, cfg)
+        everything = np.isfinite(yv)  # final forecast: every label is in the past
+        final[h] = rule(_past_losses(losses, fold_ids, everything, cfg), cfg)
     return out, final
 
 
@@ -200,21 +237,34 @@ def combine(arr: np.ndarray, weights: np.ndarray) -> np.ndarray:
         return np.where(total > 0, np.nansum(np.where(valid, arr, 0.0) * w, axis=0) / total, np.nan)
 
 
-def _weights(
-    losses: dict[str, np.ndarray], fold_ids: np.ndarray, k: int, cfg: ForecastingConfig
+def _past_losses(
+    losses: dict[str, np.ndarray], fold_ids: np.ndarray, usable: np.ndarray, cfg: ForecastingConfig
 ) -> dict[str, float]:
+    """Mean loss per model over the last `window_folds` folds with usable labels
+    (all NaN if fewer than `min_folds` such folds exist)."""
     ec = cfg.ensemble
-    earlier = np.unique(fold_ids[fold_ids < k])[-ec.window_folds :]
-    past = np.isin(fold_ids, earlier)
-    names = list(losses)
-    if len(earlier) < ec.min_folds:
-        return {m: 1 / len(names) for m in names}
-    mean_loss = {m: np.nanmean(losses[m][past]) for m in names}
+    folds = np.unique(fold_ids[usable])[-ec.window_folds :]
+    if len(folds) < ec.min_folds:
+        return {m: float("nan") for m in losses}
+    past = usable & np.isin(fold_ids, folds)
+    return {m: float(np.nanmean(v[past])) for m, v in losses.items()}
+
+
+def _inverse_loss(mean_loss: dict[str, float], cfg: ForecastingConfig) -> dict[str, float]:
+    """Ensemble: weights proportional to 1 / past loss (equal without history)."""
     inv = {m: 1 / v if np.isfinite(v) and v > 0 else 0.0 for m, v in mean_loss.items()}
     total = sum(inv.values())
-    return (
-        {m: v / total for m, v in inv.items()} if total > 0 else {m: 1 / len(names) for m in names}
-    )
+    if total > 0:
+        return {m: v / total for m, v in inv.items()}
+    return {m: 1 / len(mean_loss) for m in mean_loss}
+
+
+def _best_only(mean_loss: dict[str, float], cfg: ForecastingConfig) -> dict[str, float]:
+    """Auto-select: all weight on the model with the lowest past loss (the baseline
+    until enough history exists)."""
+    finite = {m: v for m, v in mean_loss.items() if np.isfinite(v)}
+    best = min(finite, key=lambda m: finite[m]) if finite else cfg.skill.baseline
+    return {m: float(m == best) for m in mean_loss}
 
 
 def _leaderboard(
@@ -230,7 +280,7 @@ def _leaderboard(
     for h, y in realized.items():
         yv = y.to_numpy()
         ok_base = np.isfinite(yv) & preds[base][h][qcol(0.5)].notna().to_numpy()
-        lag = max(0, math.ceil(h / cfg.walk_forward.eval_stride) - 1)
+        block = dm_block(h, cfg)
         base_loss = mean_pinball(yv, preds[base][h], qs)
         base_mae = np.abs(yv - preds[base][h][qcol(0.5)].to_numpy())
         for name, by_h in preds.items():
@@ -251,14 +301,19 @@ def _leaderboard(
             hits = ((pup >= 0.5) == up)[ok][indep]
             nonzero = (yv[ok][indep] != 0) & np.isfinite(pup[ok][indep])
             k_hit, n_dir = int(hits[nonzero].sum()), int(nonzero.sum())
+            # null = the best constant call ("always up" in a rising sample), not 50%
+            up_rate = float(up[ok][indep][nonzero].mean()) if n_dir else 0.5
+            p0 = min(max(up_rate, 1 - up_rate), 1 - 1e-9)
             dir_p = (
-                stats.binomtest(k_hit, n_dir, 0.5, alternative="greater").pvalue
+                stats.binomtest(k_hit, n_dir, p0, alternative="greater").pvalue
                 if n_dir
                 else float("nan")
             )
             pin = float(np.mean(loss[ok]))
             base_pin = float(np.mean(base_loss[ok]))
-            dm_p = float("nan") if name == base else diebold_mariano(loss[ok] - base_loss[ok], lag)
+            dm_p = (
+                float("nan") if name == base else diebold_mariano(loss[ok] - base_loss[ok], block)
+            )
             skill = 1 - pin / base_pin if base_pin > 0 else float("nan")
             rows.append(
                 LeaderRow(
@@ -279,12 +334,12 @@ def _leaderboard(
                     edge=False,
                 )
             )
+    # Holm across every (model, horizon) test: one family per leaderboard
     alpha = cfg.skill.significance_alpha
-    for h in realized:
-        cands = [r for r in rows if r.horizon == h and r.dm_p is not None]
-        for r, adj in zip(cands, holm([r.dm_p for r in cands]), strict=True):  # type: ignore[misc]
-            r.dm_p_adj = adj
-            r.edge = bool(r.skill is not None and r.skill > 0 and adj < alpha)
+    cands = [r for r in rows if r.dm_p is not None]
+    for r, adj in zip(cands, holm([r.dm_p for r in cands]), strict=True):  # type: ignore[misc]
+        r.dm_p_adj = adj
+        r.edge = bool(r.skill is not None and r.skill > 0 and adj < alpha)
     return sorted(rows, key=lambda r: (r.horizon, r.pinball if r.pinball is not None else np.inf))
 
 

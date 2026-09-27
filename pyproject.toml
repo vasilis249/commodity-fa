@@ -19,6 +19,13 @@ dependencies = [
     "scipy>=1.13",
 ]
 
+[project.optional-dependencies]
+# Chronos-2 zero-shot forecasts on CPU: `uv sync --extra foundation` (~1 GB)
+foundation = [
+    "chronos-forecasting>=2.3",
+    "torch>=2.2",
+]
+
 [project.scripts]
 fa = "fa.cli:app"
 
@@ -29,6 +36,16 @@ dev = [
     "mypy>=1.10",
     "types-pyyaml>=6.0",
 ]
+
+# CPU-only torch wheels on Linux (PyPI's Linux wheels bundle CUDA, several GB);
+# macOS/Windows use PyPI, whose wheels are CPU builds there anyway.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]

@@ -69,11 +69,11 @@ def test_invalid_config_is_rejected(
         load_config(config_copy)
 
 
-def test_purge_shorter_than_horizon_is_rejected(config_copy: Path) -> None:
+def test_embargo_must_cover_roll_mask_hindsight(config_copy: Path) -> None:
     data = yaml.safe_load((config_copy / "forecasting.yaml").read_text())
-    data["walk_forward"]["purge_days"] = 5  # < 20-day horizon: overlapping labels would leak
+    data["walk_forward"]["embargo_days"] = 2  # < window_before + window_after = 5
     (config_copy / "forecasting.yaml").write_text(yaml.safe_dump(data))
-    with pytest.raises(ValidationError, match="purge_days"):
+    with pytest.raises(ValidationError, match="embargo_days"):
         load_config(config_copy)
 
 

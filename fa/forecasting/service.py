@@ -28,6 +28,7 @@ from fa.forecasting.base import ForecastModel, qcol
 from fa.forecasting.baselines import drift, naive
 from fa.forecasting.dataset import Dataset, build_dataset
 from fa.forecasting.evaluate import (
+    AUTO_SELECT,
     ENSEMBLE,
     EvalResult,
     LeaderRow,
@@ -159,13 +160,29 @@ def evaluate_cached(
     return cached
 
 
-def _verdict(row: LeaderRow | None, h: int, best: LeaderRow | None, alpha: float) -> str:
+def _verdict(
+    row: LeaderRow | None,
+    h: int,
+    best: LeaderRow | None,
+    alpha: float,
+    n_models: int,
+    auto: LeaderRow | None,
+) -> str:
     if row is not None and row.edge:
-        return (
+        text = (
             f"{row.model} beats the naive random walk at {h}d out of sample "
             f"(pinball skill {row.skill:+.1%}, DM p={row.dm_p:.3g}, "
             f"Holm-adjusted {row.dm_p_adj:.3g})."
+            f" Caveat: it is the best of {n_models} models scored on these same origins, "
+            "so its skill is optimistic (winner's curse)"
         )
+        if auto is not None and auto.skill is not None:
+            p = f"{auto.dm_p_adj:.3g}" if auto.dm_p_adj is not None else "n/a"
+            text += (
+                f"; picking the leader using earlier folds only (auto_select) scored "
+                f"{auto.skill:+.1%} (adjusted p={p})"
+            )
+        return text + "."
     if best is None:
         return f"No model could be evaluated at {h}d."
     p = f"{best.dm_p_adj:.3g}" if best.dm_p_adj is not None else "n/a"
@@ -218,6 +235,8 @@ def forecast_dataset(
     horizons = []
     for h in ds.horizons:
         rows = [r for r in ev.leaderboard if r.horizon == h]
+        auto = next((r for r in rows if r.model == AUTO_SELECT), None)
+        rows = [r for r in rows if r.model != AUTO_SELECT]  # a procedure, not a live model
         with_edge = [r for r in rows if r.edge]
         best_any = next((r for r in rows if r.model != fc.skill.baseline), None)
         chosen = (
@@ -248,7 +267,12 @@ def forecast_dataset(
                     dm_p_adj=chosen.dm_p_adj,
                     edge=chosen.edge,
                     verdict=_verdict(
-                        chosen if chosen.edge else None, h, best_any, fc.skill.significance_alpha
+                        chosen if chosen.edge else None,
+                        h,
+                        best_any,
+                        fc.skill.significance_alpha,
+                        n_models=len(rows) - 1,
+                        auto=auto,
                     ),
                 ),
                 all_models={
@@ -256,6 +280,15 @@ def forecast_dataset(
                 },
             )
         )
+    if "chronos2" in factories:
+        notes.append(
+            "Chronos-2 was pretrained on large public time-series corpora that may include "
+            "this history; its scores on origins before its release may be contaminated."
+        )
+    notes.append(
+        "auto_select = the leaderboard leader chosen on earlier folds only, re-chosen each "
+        "fold: the out-of-sample score of 'use whichever model leads'."
+    )
     if futures:
         notes.append(
             "Bands are for the roll-adjusted front month from the last settle; a contract roll "

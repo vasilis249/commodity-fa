@@ -15,6 +15,7 @@ uv run fa config check       # validate config/*.yaml, show which keys are set
 uv run fa universe
 uv run fa data prices CL=F [--years 10] [--offline] [--refresh] [-v]   # prices + roll masks + quality
 uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
+uv run fa forecast CL=F [--models naive,lightgbm] [--folds N] [--refresh] [--json]
 uv run fa data cache                                                     # list cache entries
 uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
 ```
@@ -72,6 +73,9 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - **The volume-detected roll mask has hindsight.** It picks Yahoo's splice session using volume from up to `window_before` (4) sessions later: the 2026-09 audit found 92 days masked in real time but unmasked in the final mask. Use it for **labels** and `close_adj` only. **Forecasting features must use `fa.data.rolls.calendar_roll_windows`**, which depends only on the exchange calendar and is therefore known in advance.
 - **`close_adj` is anchored at the latest close.** Its level at t depends on later roll gaps, so full-sample SMA, MACD, ATR or support levels in price units differ (~2%) from what was known at t. Features must be scale-invariant ratios or returns, or be computed from data truncated at t (the snapshot does the latter).
 - **Curve as of a date:** settles must be on or before `as_of`, and contracts contiguous from the front month (`DataService.curve(as_of=...)`).
+- **Intraday bar fields:** a bar's high, low and volume may include trading after the settlement (the decision time), so forecasting features lag them one bar.
+- **Calendar roll windows** extend to expiry + window_after + mask_after, so they cover every volume-detected splice. `embargo_days` must be ≥ window_before + window_after (the label mask's hindsight); config validation enforces this.
+- **Model selection is itself a fit.** Never report the leaderboard winner's skill as out of sample without the `auto_select` comparison.
 - **Publisher disruptions:** `config/data.yaml: release_overrides` pushes `available_at` late for government-shutdown periods (CFTC COT 2018–19 and 2025). These dates are conservative upper bounds.
 - **Negative prices** (WTI at −37.63 on 2020-04-20) make log returns undefined. Flag them and handle them explicitly, never with a silent `NaN`/`inf`.
 - **News is live-only.** Feeds carry recent items only, so news can never be used in backtests or walk-forward features.
@@ -91,6 +95,14 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - `snapshot.py` builds the point-in-time `Snapshot` (Pydantic). Agents will cite its numbers in Phase 4. All analytics models inherit `FiniteModel`, so NaN/inf are stored as `None`.
 - `fa analyze SYMBOL --no-llm [--as-of D] [--offline] [--json] [--no-curve]`.
 
+## Forecasting (Phase 3)
+- `fa/forecasting/dataset.py`: `Dataset` holds causal features, the calendar-masked returns `r` and a scale-free `level` anchored at the first bar. Labels use the final roll mask. `until(pos)` is the world at row `pos`: labels exist only where t + h ≤ pos (purge by construction), and `with_labels=False` raises on `label()`.
+- Models (`base.ForecastModel`): `fit(train_view)` and `predict(view, positions)`. Each returns per-horizon frames with `q0.1`, `q0.5`, `q0.9` and `p_up`. The prediction at row p may use rows ≤ p only; `test_models_only_use_rows_up_to_each_origin` checks this.
+- The ladder: `naive` (no-change: median 0, P(up) 50%), `drift`, `auto_arima`, `auto_ets`, `lightgbm` (native API, no scikit-learn), and optional `chronos2`. There's also an `ensemble` (inverse past pinball) and `auto_select` (the leader on earlier folds). Both blends only use losses whose labels ended by the fold's training cut.
+- Evaluation (`evaluate.py`): walk-forward with an embargo; models are refit every `refit_every` folds. An edge requires positive pinball skill and a batch-means DM test (blocks = origins per fitted model), with a Holm-adjusted p < alpha across **all** model × horizon tests. Direction is tested against the best constant call. The forecast shows the random walk unless a model has an edge, and then discloses the winner's curse and the `auto_select` score.
+- The leaderboard is cached in `leaderboards/`, keyed by symbol, last date, config and models.
+- **Any new feature** must pass `assert_causal` (`fa/forecasting/leakage.py`), with cut points inside roll windows. Deliberate leaks (shift(-1), full-sample z-score, centered window, bfill, interpolate, period-date join) are tested to be caught.
+
 ## Conventions
 - Python 3.12, `uv`, `ruff` (line length 100), lenient `mypy`, `pytest`.
 - Small, readable modules. Add a dependency only when its phase needs it, and say why.
@@ -109,7 +121,7 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | 0 ✅ | Scaffold, config, CLI, CLAUDE.md, leakage-auditor | `uv run pytest` green; `uv run fa --help` works |
 | 1 ✅ | Providers (yfinance, EIA, CFTC, FRED, RSS), cache, quality checks (gaps, rolls, negative prices, stale data) | 10 years of `CL=F` fetched twice; the second run hits the cache only; tests use fixtures |
 | 2 ✅ | Indicators, supply/demand, curve, seasonality, risk metrics | Reference-value tests; `fa analyze CL=F --no-llm` prints a snapshot |
-| 3 | Model ladder, walk-forward, leaderboard | `fa forecast CL=F` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
+| 3 ✅ | Model ladder, walk-forward, leaderboard | `fa forecast CL=F`/`SPY` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
 | 4 | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
 | 5 | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
 | 6 | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |

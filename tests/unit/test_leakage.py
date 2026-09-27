@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from fa.config import AppConfig, RollRule, load_config
-from fa.data.pit import release_timestamp
+from fa.data.pit import decision_times, release_timestamp
 from fa.data.rolls import calendar_roll_windows
 from fa.forecasting.dataset import make_dataset, price_features
 from fa.forecasting.leakage import LeakageError, assert_causal
@@ -73,9 +73,12 @@ def test_fundamental_features_are_causal(cfg: AppConfig) -> None:
     assert inst is not None
 
     def build(d: pd.DataFrame) -> pd.DataFrame:
-        end = d.index[-1]
-        e = {k: v.loc[:end] for k, v in eia.items()}
-        return make_dataset("CL=F", d, inst, cfg.data.rolls, (1,), e, cot.loc[:end]).features
+        # the world at the cut: only rows *released* by that session's settlement
+        # (truncating by period date would hide a join on period date; audit finding)
+        cutoff = decision_times(d.index[-1:], inst.settle_time, inst.timezone)[0]
+        e = {k: v[v["available_at"] <= cutoff] for k, v in eia.items()}
+        c = cot[cot["available_at"] <= cutoff]
+        return make_dataset("CL=F", d, inst, cfg.data.rolls, (1,), e, c).features
 
     assert_causal(build, PRICES, CUTS)
 
@@ -98,3 +101,30 @@ def test_truncated_view_purges_overlapping_labels(cfg: AppConfig, h: int) -> Non
     full = ds.label(h).iloc[: pos + 1]
     assert view.iloc[pos - h + 1 :].isna().all()  # these would need prices after `pos`
     pd.testing.assert_series_equal(view.iloc[: pos - h + 1], full.iloc[: pos - h + 1])
+
+
+def test_period_date_join_would_be_caught(cfg: AppConfig, monkeypatch) -> None:
+    """Regression guard: if pit_join matched on period date, the test above must fail."""
+    import fa.forecasting.dataset as dsmod
+
+    real = dsmod.pit_join
+
+    def by_period(sessions, series, settle_time, tz, columns=None):
+        leaky = series.copy()
+        leaky["available_at"] = pd.to_datetime(leaky.index).tz_localize("UTC")
+        return real(sessions, leaky, settle_time, tz, columns)
+
+    monkeypatch.setattr(dsmod, "pit_join", by_period)
+    with pytest.raises(LeakageError):
+        test_fundamental_features_are_causal(cfg)
+
+
+def test_intraday_high_low_volume_are_lagged(cfg: AppConfig) -> None:
+    """A bar's high/low/volume may postdate the settlement: row t must not use them."""
+    base = price_features(PRICES, RollRule.NYMEX_CL, "cme", cfg.data.rolls)
+    bumped = PRICES.copy()
+    t = PRICES.index[400]
+    bumped.loc[t, ["high", "volume"]] *= 3
+    bumped.loc[t, "low"] *= 0.5
+    after = price_features(bumped, RollRule.NYMEX_CL, "cme", cfg.data.rolls)
+    pd.testing.assert_series_equal(base.loc[t], after.loc[t])

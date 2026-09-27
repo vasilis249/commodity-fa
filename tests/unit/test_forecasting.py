@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -57,9 +59,24 @@ def test_pinball_and_dm_test() -> None:
     assert ev.pinball(y, np.array([0.0, 0.0]), 0.9).tolist() == pytest.approx([0.0, 0.9])
     rng = np.random.default_rng(0)
     noise = rng.normal(0, 1, 400)
-    assert ev.diebold_mariano(noise - 0.5, lag=0) < 0.001  # clearly lower loss
-    assert ev.diebold_mariano(noise + 0.5, lag=0) > 0.999
-    assert np.isnan(ev.diebold_mariano(np.zeros(5), lag=0))
+    assert ev.diebold_mariano(noise - 0.5, block=10) < 0.001  # clearly lower loss
+    assert ev.diebold_mariano(noise + 0.5, block=10) > 0.999
+    assert np.isnan(ev.diebold_mariano(np.zeros(3), block=1))
+
+
+def test_dm_test_size_under_realistic_null(cfg: AppConfig) -> None:
+    """Audit finding: the old Newey-West DM rejected up to 10% at nominal 5%.
+    Null = MA(3) overlap + GARCH-like volatility + a bias per refit block."""
+    rng = np.random.default_rng(42)
+    block = ev.dm_block(20, cfg.forecasting)
+    n, rejections, sims = 120, 0, 1500
+    for _ in range(sims):
+        e = rng.normal(0, 1, n + 3)
+        x = (e[:-3] + e[1:-2] + e[2:-1] + e[3:]) / 2
+        vol = np.exp(np.cumsum(rng.normal(0, 0.1, n)))
+        bias = np.repeat(rng.normal(0, 0.3, n // block + 1), block)[:n]
+        rejections += ev.diebold_mariano(x * vol / vol.mean() + bias, block) < 0.05
+    assert rejections / sims <= 0.075
 
 
 def test_non_overlapping_origins() -> None:
@@ -74,13 +91,30 @@ def test_ensemble_combine_ignores_missing_models() -> None:
     assert out.tolist() == [[1.0, 0.25 * 2 + 0.75 * 4]]
 
 
-def test_ensemble_weights_use_only_earlier_folds(cfg: AppConfig) -> None:
-    fold_ids = np.repeat(np.arange(6), 4)
-    losses = {"a": np.ones(24), "b": np.full(24, 2.0)}
-    w = ev._weights(losses, fold_ids, 5, cfg.forecasting)
-    losses["b"][fold_ids >= 5] = 1000.0  # the current/future folds must not matter
-    assert ev._weights(losses, fold_ids, 5, cfg.forecasting) == w
-    assert w["a"] == pytest.approx(2 / 3)
+def test_ensemble_and_auto_select_ignore_labels_from_the_future(cfg: AppConfig) -> None:
+    """Audit finding: weights at fold k used labels ending inside fold k's test block.
+    Poison every return after fold k starts: fold k's blended forecasts must not move."""
+    small = small_config(cfg)
+    ds = synthetic_dataset(small, n=800)
+    names = ["naive", "drift", "auto_ets"]
+    factories = model_factories(small.forecasting, names)
+    clean = ev.walk_forward(ds, factories, small.forecasting)
+    fold = clean.folds[6]
+    poisoned_ret = ds.ret_label.copy()  # type: ignore[union-attr]
+    poisoned_ret.iloc[fold.test_start :] *= 5
+    poisoned = ev.walk_forward(replace(ds, ret_label=poisoned_ret), factories, small.forecasting)
+    rows = ds.dates[list(fold.origins)]
+    for model in [*names, ev.ENSEMBLE, ev.AUTO_SELECT]:
+        for h in ds.horizons:
+            pd.testing.assert_frame_equal(
+                clean.predictions[model][h].loc[rows], poisoned.predictions[model][h].loc[rows]
+            )
+
+
+def test_auto_select_starts_with_the_baseline(cfg: AppConfig) -> None:
+    w = ev._best_only({"naive": float("nan"), "drift": float("nan")}, cfg.forecasting)
+    assert w == {"naive": 1.0, "drift": 0.0}
+    assert ev._best_only({"naive": 2.0, "drift": 1.0}, cfg.forecasting)["drift"] == 1.0
 
 
 def test_unknown_model_and_missing_chronos(cfg: AppConfig) -> None:

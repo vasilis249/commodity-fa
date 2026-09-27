@@ -11,6 +11,7 @@ TimesFM is deliberately not wired in: its latest weights are non-commercial.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from functools import cache
 from typing import Any
 
 import numpy as np
@@ -30,6 +31,14 @@ def chronos_available() -> bool:
     except ImportError:
         return False
     return True
+
+
+@cache
+def _load(model_id: str, device: str) -> object:
+    """Load the pipeline once per process (zero-shot: nothing is fitted per fold)."""
+    from chronos import BaseChronosPipeline
+
+    return BaseChronosPipeline.from_pretrained(model_id, device_map=device)
 
 
 def _to_numpy(quantiles: object) -> np.ndarray:
@@ -55,11 +64,7 @@ class ChronosModel(ForecastModel):
 
     def fit(self, train: Dataset) -> None:
         if self._pipeline is None:
-            from chronos import BaseChronosPipeline
-
-            self._pipeline = BaseChronosPipeline.from_pretrained(
-                self.settings.model_id, device_map=self.settings.device
-            )
+            self._pipeline = _load(self.settings.model_id, self.settings.device)
 
     def predict(self, view: Dataset, positions: Sequence[int]) -> dict[int, pd.DataFrame]:
         import torch

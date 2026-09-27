@@ -149,7 +149,7 @@ def test_calendar_roll_windows_are_known_in_advance(cfg: AppConfig) -> None:
     prices = load_yahoo_fixture("CL=F", "2026")
     win = calendar_roll_windows(prices.index, RollRule.NYMEX_CL, "cme", cfg.data.rolls)
     sep = win["2026-09-10":"2026-09-25"]
-    # CLV26 expires Tue 22 Sep: window = 4 sessions before .. 1 after
+    # CLV26 expires Tue 22 Sep: window = 4 sessions before .. 1 after + mask_after (1)
     assert list(sep[sep].index.date) == [
         date(2026, 9, 16),
         date(2026, 9, 17),
@@ -157,8 +157,24 @@ def test_calendar_roll_windows_are_known_in_advance(cfg: AppConfig) -> None:
         date(2026, 9, 21),
         date(2026, 9, 22),
         date(2026, 9, 23),
+        date(2026, 9, 24),
     ]
     # causal: truncating the data never changes the mask on earlier sessions
     cut = calendar_roll_windows(prices.index[:40], RollRule.NYMEX_CL, "cme", cfg.data.rolls)
     pd.testing.assert_series_equal(cut, win.iloc[:40])
     assert not calendar_roll_windows(prices.index, RollRule.NONE, "cme", cfg.data.rolls).any()
+
+
+def test_calendar_window_covers_a_late_switch(cfg: AppConfig) -> None:
+    """Audit finding: a switch on expiry+1 masks expiry+2, which must be in the window."""
+    prices = load_yahoo_fixture("CL=F", "2026")
+    win = calendar_roll_windows(prices.index, RollRule.NYMEX_CL, "cme", cfg.data.rolls)
+    events = detect_rolls(
+        prices,
+        expiries(RollRule.NYMEX_CL, date(2026, 6, 1), date(2026, 10, 30), "cme"),
+        cfg.data.rolls,
+        "cme",
+    )
+    for ev in events:
+        for d in ev.masked:
+            assert win[pd.Timestamp(d)], d

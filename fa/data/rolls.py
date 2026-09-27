@@ -200,7 +200,7 @@ def _anchor_to_last(close: pd.Series, ret: pd.Series) -> pd.Series:
 def calendar_roll_windows(
     index: pd.DatetimeIndex, rule: RollRule, calendar: str, settings: RollSettings
 ) -> pd.Series:
-    """True on sessions inside any [expiry - window_before, expiry + window_after] window.
+    """True inside [expiry - window_before, expiry + window_after + mask_after] windows.
 
     Depends only on the exchange calendar, so it is known in advance: a causal mask for
     forecasting *features* (the volume-detected mask picks the splice day with up to
@@ -213,7 +213,10 @@ def calendar_roll_windows(
     for exp_ts in expiries(rule, index[0].date(), horizon, calendar).index:
         expiry = exp_ts.date()
         lo = pd.Timestamp(add_business_days(expiry, -settings.window_before, calendar))
-        hi = pd.Timestamp(add_business_days(expiry, settings.window_after, calendar))
+        # a switch found on the window's last day also masks `mask_after` more sessions
+        hi = pd.Timestamp(
+            add_business_days(expiry, settings.window_after + settings.mask_after, calendar)
+        )
         out[(index >= lo) & (index <= hi)] = True
     return out
 
