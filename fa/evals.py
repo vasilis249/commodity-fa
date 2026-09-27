@@ -332,7 +332,12 @@ def run_evals(
             row.reference = _ref_value(ref)
             row.drift = _drifted(q, row.reference)
         except (LookupError, KeyError, ValueError, StopIteration) as exc:
-            row.error = f"reference failed: {exc}"
+            if q.expect.type != "unanswerable":
+                # the data behind the answer could not be fetched (e.g. a provider rate
+                # limit): not the agent's fault, and asking would only spend money
+                row.skipped = f"data unavailable: {exc}"
+                rows.append(row)
+                continue
             ref = None
         if solver == "reference":
             ans = ref

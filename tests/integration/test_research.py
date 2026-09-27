@@ -188,3 +188,20 @@ def test_cli_ask_and_eval_need_a_key(monkeypatch) -> None:
     r1 = CliRunner().invoke(app, ["ask", "What was the WTI settle?", "--offline"])
     r2 = CliRunner().invoke(app, ["eval", "--offline"])
     assert r1.exit_code == 2 and r2.exit_code == 2 and "reference" in r2.output
+
+
+def test_unavailable_reference_is_skipped_not_scored(env, no_fred) -> None:
+    cfg, svc, tmp = env
+    q = evals.Question(
+        id="curve",
+        category="curve",
+        symbol="CL=F",
+        as_of=AS_OF,
+        question="Contango?",
+        expect=evals.Expect(type="choice", value="backwardation"),
+        ref=evals.Ref(kind="field", tool="term_structure", path="metrics.structure"),
+    )  # no historical curve offline: the data behind the answer is unavailable
+    llm = FakeLLM()
+    rep = evals.run_evals(cfg, svc, [q], solver="llm", llm=llm, runs_dir=tmp / "runs")
+    assert rep.run == 0 and rep.rows[0].skipped.startswith("data unavailable")
+    assert llm.calls == []  # nothing spent on an unanswerable-by-data question

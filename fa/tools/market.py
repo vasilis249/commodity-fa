@@ -59,7 +59,12 @@ def seasonality(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
 def inventories(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
     s = _snapshot(ctx)
     if not s.inventories:
-        raise ToolError("no EIA inventory series configured or released for this instrument")
+        reasons = [n for n in s.notes if n.startswith("EIA ")]  # e.g. rate limited, not released
+        raise ToolError(
+            "; ".join(reasons)
+            if reasons
+            else "no EIA inventory series configured for this instrument"
+        )
     return {"as_of": s.as_of, "inventories": s.inventories}
 
 
