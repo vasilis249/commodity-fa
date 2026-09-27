@@ -1,0 +1,22 @@
+# Paper backtests. Costs/slippage/roll costs live in risk.yaml (backtest section).
+# Targets are decided at the close of day t and executed at the open of day t+1.
+long_short: false               # false: negative signals go flat instead of short
+vol_target: false               # true: scale positions to risk.vol_target_annual (20d vol)
+results_dir: backtests          # relative to the repo root; git-ignored
+
+sma:
+  fast: 50
+  slow: 200
+
+forecast:
+  model: ensemble               # any forecasting model name, or ensemble
+  members: [naive, drift, auto_arima, auto_ets]   # models evaluated (ensemble blends them)
+  horizon: 5                    # which horizon's P(up) drives the signal
+  up_threshold: 0.55            # go long when P(up) >= this
+  down_threshold: 0.45          # go short (or flat if long-only) when P(up) <= this
+
+agent:
+  rebalance_every: 20           # sessions between agent decisions
+  max_decisions: 12             # most recent decisions only (cost control)
+  debate_rounds: 1
+  est_usd_per_decision: 0.35    # used to warn before a run; the hard cap is models.budget.max_usd_backtest

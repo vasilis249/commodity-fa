@@ -223,6 +223,54 @@ def report(
 
 
 @app.command()
+def backtest(
+    symbol: str,
+    strategy: Annotated[
+        str, typer.Option("--strategy", "-s", help="sma | forecast | agent")
+    ] = "sma",
+    offline: Annotated[bool, typer.Option("--offline", help="Use cached data only.")] = False,
+    yes: Annotated[
+        bool, typer.Option("--yes", help="Confirm an agent backtest estimated above budget.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the report as JSON.")] = False,
+    config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR,
+) -> None:
+    """Paper backtest of a strategy vs buy-and-hold, with costs (paper only)."""
+    from fa.backtest.agent_signal import BacktestCostWarning
+    from fa.backtest.service import run_strategy
+    from fa.config import load_secrets
+    from fa.data.http import DataUnavailable
+    from fa.data.service import DataService
+
+    cfg = _load_or_exit(config_dir)
+    if strategy not in ("sma", "forecast", "agent"):
+        typer.secho("strategy must be sma, forecast or agent", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+    kw: dict[str, object] = {}
+    if strategy == "agent":
+        if not load_secrets().anthropic_api_key:
+            typer.secho(
+                "ANTHROPIC_API_KEY is not set (add it to .env).", fg=typer.colors.RED, err=True
+            )
+            raise typer.Exit(code=2)
+        kw["confirm"] = yes
+    try:
+        rep = run_strategy(DataService(cfg, offline=offline), symbol, strategy, **kw)  # type: ignore[arg-type]
+    except BacktestCostWarning as exc:
+        typer.secho(f"{exc}. Re-run with --yes to proceed.", fg=typer.colors.YELLOW, err=True)
+        raise typer.Exit(code=3) from exc
+    except (DataUnavailable, ValueError) as exc:
+        typer.secho(f"Backtest failed: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(rep.model_dump_json(indent=2))
+        return
+    from fa.reports.backtest_text import render
+
+    typer.echo(render(rep))
+
+
+@app.command()
 def universe(config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR) -> None:
     """List the configured instruments."""
     cfg = _load_or_exit(config_dir)

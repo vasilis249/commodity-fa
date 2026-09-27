@@ -59,11 +59,19 @@ def rate(score: float, cfg: AgentsConfig) -> Rating:
     return "Hold"
 
 
-def decide(views: dict[str, AnalystView], fc: ForecastReport | None, cfg: AgentsConfig) -> Decision:
+def decide(
+    views: dict[str, AnalystView],
+    fc: ForecastReport | None,
+    cfg: AgentsConfig,
+    forecast_component: tuple[float, bool, str] | None = None,
+) -> Decision:
+    """`forecast_component` = (signal, has_edge, note) overrides the forecast service
+    (backtests pass one computed from already-settled forecasts only)."""
     components = []
+    fsig = forecast_component or forecast_signal(fc)
     for name, weight in cfg.decision_weights.items():
         if name == "forecast":
-            sig, _, note = forecast_signal(fc)
+            sig, _, note = fsig
         elif name in views:
             v = views[name]
             sig, note = (
@@ -77,7 +85,7 @@ def decide(views: dict[str, AnalystView], fc: ForecastReport | None, cfg: Agents
         )
     total_w = sum(c.weight for c in components) or 1.0
     score = sum(c.contribution for c in components) / total_w
-    _, edge, _ = forecast_signal(fc)
+    edge = fsig[1]
     return Decision(
         rating=rate(score, cfg),
         score=score,

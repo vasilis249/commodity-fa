@@ -373,6 +373,44 @@ class RiskConfig(_Strict):
     backtest: BacktestCosts
 
 
+# --- backtest.yaml -----------------------------------------------------------------
+
+
+class SMASettings(_Strict):
+    fast: int = Field(gt=0)
+    slow: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> SMASettings:
+        if self.fast >= self.slow:
+            raise ValueError("sma.fast must be < sma.slow")
+        return self
+
+
+class ForecastSignalSettings(_Strict):
+    model: str
+    members: list[str]
+    horizon: int = Field(gt=0)
+    up_threshold: float = Field(gt=0.5, lt=1)
+    down_threshold: float = Field(gt=0, lt=0.5)
+
+
+class AgentBacktestSettings(_Strict):
+    rebalance_every: int = Field(gt=0)
+    max_decisions: int = Field(gt=0)
+    debate_rounds: int = Field(ge=0, le=3)
+    est_usd_per_decision: float = Field(gt=0)
+
+
+class BacktestConfig(_Strict):
+    long_short: bool
+    vol_target: bool
+    results_dir: Path
+    sma: SMASettings
+    forecast: ForecastSignalSettings
+    agent: AgentBacktestSettings
+
+
 # --- secrets -------------------------------------------------------------------------
 
 
@@ -400,6 +438,7 @@ class AppConfig(_Strict):
     agents: AgentsConfig
     models: ModelsConfig
     risk: RiskConfig
+    backtest: BacktestConfig
 
     @model_validator(mode="after")
     def _cross_file_checks(self) -> AppConfig:
@@ -411,6 +450,8 @@ class AppConfig(_Strict):
                 f"walk_forward.embargo_days must be >= {hindsight} "
                 "(roll-mask hindsight: rolls.window_before + rolls.window_after)"
             )
+        if self.backtest.forecast.horizon not in self.forecasting.horizons:
+            raise ValueError("backtest.forecast.horizon must be one of forecasting.horizons")
         missing = set(self.agents.agents) - set(self.models.agent_roles)
         if missing:
             raise ValueError(f"agents without a model role in models.yaml: {sorted(missing)}")
@@ -423,6 +464,7 @@ CONFIG_FILES: dict[str, type[BaseModel]] = {
     "agents": AgentsConfig,
     "models": ModelsConfig,
     "risk": RiskConfig,
+    "backtest": BacktestConfig,
 }
 
 

@@ -231,15 +231,17 @@ def new_session(
     registry: ToolRegistry,
     llm: LLM,
     costs: CostTracker,
+    prompts_dir: Path = PROMPTS_DIR,
+    tools: list[str] | None = None,
 ) -> AgentSession:
     role = cfg.models.roles[cfg.models.agent_roles[agent]]
     spec = cfg.agents.agents[agent]
     return AgentSession(
         agent=agent,
         role=role,
-        prompt=load_prompt(agent),
+        prompt=load_prompt(agent, prompts_dir),
         output_model=output_model,
-        tools=list(spec.tools),
+        tools=list(spec.tools if tools is None else tools),
         ctx=ctx,
         registry=registry,
         llm=llm,

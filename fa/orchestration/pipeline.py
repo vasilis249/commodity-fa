@@ -23,7 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from fa.agents.base import LLM, AgentError, AgentSession, new_session
+from fa.agents.base import LLM, PROMPTS_DIR, AgentError, AgentSession, new_session
 from fa.agents.claims import CITE, SENTENCE, Violation, check_fields
 from fa.agents.schemas import AnalystView, ResearcherCase, RiskView, Synthesis, ValidatorVerdict
 from fa.analytics.snapshot import Snapshot
@@ -72,9 +72,21 @@ class RunState:
     removed: list[str] = field(default_factory=list)
     validator_issues: list[str] = field(default_factory=list)
     unresolved: list[str] = field(default_factory=list)
+    prompts_dir: Path = PROMPTS_DIR
+    tool_overrides: dict[str, list[str]] = field(default_factory=dict)
 
     def session(self, agent: str, model: type[BaseModel]) -> AgentSession:
-        s = new_session(agent, model, self.cfg, self.ctx, self.registry, self.llm, self.costs)
+        s = new_session(
+            agent,
+            model,
+            self.cfg,
+            self.ctx,
+            self.registry,
+            self.llm,
+            self.costs,
+            prompts_dir=self.prompts_dir,
+            tools=self.tool_overrides.get(agent),
+        )
         self.sessions[agent] = s
         return s
 
@@ -222,10 +234,17 @@ def _instrument_line(ctx: RunContext, snap: Snapshot) -> str:
     )
 
 
-def run_analysts(state: RunState, snap: Snapshot, parallel: bool) -> dict[str, AnalystView]:
-    enabled = [a for a in ANALYSTS if state.cfg.agents.agents[a].enabled]
+def run_analysts(
+    state: RunState,
+    snap: Snapshot,
+    parallel: bool,
+    analysts: tuple[str, ...] = ANALYSTS,
+    message: str | None = None,
+    validate: bool = True,
+) -> dict[str, AnalystView]:
+    enabled = [a for a in analysts if state.cfg.agents.agents[a].enabled]
     sessions = {a: state.session(a, AnalystView) for a in enabled}
-    msg = _instrument_line(state.ctx, snap)
+    msg = message or _instrument_line(state.ctx, snap)
 
     def one(agent: str) -> tuple[str, BaseModel | None]:
         try:
@@ -241,7 +260,8 @@ def run_analysts(state: RunState, snap: Snapshot, parallel: bool) -> dict[str, A
     else:
         done = [one(a) for a in enabled]
     views: dict[str, BaseModel] = {a: v for a, v in done if v is not None}
-    views = validate_meaning(state, views)
+    if validate:
+        views = validate_meaning(state, views)
     return {a: v for a, v in views.items() if isinstance(v, AnalystView)}
 
 
