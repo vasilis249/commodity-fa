@@ -151,6 +151,78 @@ def forecast(
 
 
 @app.command()
+def report(
+    symbol: str,
+    as_of: Annotated[
+        str | None, typer.Option("--as-of", help="Decision date YYYY-MM-DD (point in time).")
+    ] = None,
+    offline: Annotated[bool, typer.Option("--offline", help="Use cached data only.")] = False,
+    rounds: Annotated[
+        int | None, typer.Option("--rounds", help="Bull/bear debate rounds (config default).")
+    ] = None,
+    budget: Annotated[
+        float | None, typer.Option("--budget", help="Override the USD budget for this run.")
+    ] = None,
+    config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR,
+) -> None:
+    """Full agent report: analysts, bull/bear debate, risk review, rating (computed in code)."""
+    from datetime import date
+
+    from fa.agents.base import AnthropicLLM
+    from fa.config import load_secrets
+    from fa.data.http import DataUnavailable
+    from fa.data.service import DataService
+    from fa.orchestration.pipeline import PipelineAborted, run_report
+    from fa.reports.render import save
+
+    cfg = _load_or_exit(config_dir)
+    if budget is not None:
+        b = cfg.models.budget.model_copy(update={"max_usd_per_run": budget})
+        cfg = cfg.model_copy(update={"models": cfg.models.model_copy(update={"budget": b})})
+    if not load_secrets().anthropic_api_key:
+        typer.secho("ANTHROPIC_API_KEY is not set (add it to .env).", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2)
+    typer.secho(
+        f"Running agents (budget ${cfg.models.budget.max_usd_per_run:.2f})...", dim=True, err=True
+    )
+    try:
+        rep = run_report(
+            cfg,
+            DataService(cfg, offline=offline),
+            symbol,
+            AnthropicLLM(),
+            as_of=date.fromisoformat(as_of) if as_of else None,
+            debate_rounds=rounds,
+        )
+    except PipelineAborted as exc:
+        typer.secho(
+            f"Aborted: {exc} (spent ${exc.spent_usd:.3f}); scratchpad: {exc.scratchpad}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    except DataUnavailable as exc:
+        typer.secho(f"Data unavailable: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    paths = save(rep, cfg.config_dir.parent / "reports")
+    typer.secho(f"{rep.symbol}: {rep.rating} (conviction {rep.conviction:.2f})", bold=True)
+    typer.echo(rep.thesis)
+    typer.echo(f"Suggested max exposure: {rep.max_exposure:.0%}")
+    v = rep.validation
+    typer.echo(
+        f"Validation: {v.numeric_violations_fixed} numeric fixes, "
+        f"{len(v.sentences_removed)} sentences removed, "
+        f"{len(v.unresolved_validator_issues)} unresolved validator issues"
+    )
+    typer.echo(
+        f"Run cost: ${rep.cost.usd:.3f} (budget ${rep.cost.budget_usd:.2f}), "
+        f"{rep.cost.tokens:,} tokens, {rep.cost.calls} calls"
+    )
+    typer.echo(f"Report: {paths['md']} (+ .json, .html)\nScratchpad: {rep.scratchpad}")
+    typer.secho(rep.disclaimer, dim=True)
+
+
+@app.command()
 def universe(config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR) -> None:
     """List the configured instruments."""
     cfg = _load_or_exit(config_dir)

@@ -4,11 +4,12 @@
 default_role: analyst
 
 roles:
-  analyst: {model: claude-sonnet-5, effort: medium, max_tokens: 8000}
-  researcher: {model: claude-sonnet-5, effort: medium, max_tokens: 8000}
-  risk_reviewer: {model: claude-sonnet-5, effort: medium, max_tokens: 8000}
-  validator: {model: claude-opus-5-5, effort: high, max_tokens: 16000}
-  synthesizer: {model: claude-opus-5-5, effort: high, max_tokens: 16000}
+  # max_tokens includes adaptive thinking; effort is the main cost lever
+  analyst: {model: claude-sonnet-5, effort: low, max_tokens: 6000}
+  researcher: {model: claude-sonnet-5, effort: low, max_tokens: 5000}
+  risk_reviewer: {model: claude-sonnet-5, effort: low, max_tokens: 5000}
+  validator: {model: claude-opus-5-5, effort: medium, max_tokens: 8000}
+  synthesizer: {model: claude-opus-5-5, effort: medium, max_tokens: 10000}
 
 agent_roles:
   supply_demand_analyst: analyst
@@ -26,6 +27,7 @@ budget:
   max_usd_per_run: 1.00         # hard cap: the pipeline aborts cleanly when exceeded
   max_usd_backtest: 5.00        # LLM-agent backtests warn before exceeding this estimate
   max_tokens_per_run: 400000
+  preflight_output_fraction: 0.35  # pre-call estimate assumes this share of max_tokens is used
 
 prompt_caching: true
 

@@ -17,6 +17,7 @@ dependencies = [
     "statsforecast>=2.0",
     "lightgbm>=4.3",
     "scipy>=1.13",
+    "anthropic>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -60,6 +61,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"fa/tools/market.py" = ["E501"]  # tool descriptions read better unwrapped
 
 [tool.mypy]
 python_version = "3.12"

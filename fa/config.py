@@ -282,12 +282,25 @@ class AgentSpec(_Strict):
     tools: list[str]
 
 
+class RatingThresholds(_Strict):
+    strong: float = Field(gt=0, le=1)
+    weak: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> RatingThresholds:
+        if self.weak >= self.strong:
+            raise ValueError("rating_thresholds: weak must be < strong")
+        return self
+
+
 class AgentsConfig(_Strict):
     debate_rounds: int = Field(ge=0, le=5)
     validator_max_loops: int = Field(ge=0, le=5)
+    agent_max_steps: int = Field(ge=2, le=30)
     research_loop_max_steps: int = Field(gt=0)
     agents: dict[str, AgentSpec]
     decision_weights: dict[str, float]
+    rating_thresholds: RatingThresholds
 
     @field_validator("decision_weights")
     @classmethod
@@ -310,6 +323,7 @@ class Budget(_Strict):
     max_usd_per_run: float = Field(gt=0)
     max_usd_backtest: float = Field(gt=0)
     max_tokens_per_run: int = Field(gt=0)
+    preflight_output_fraction: float = Field(gt=0, le=1)
 
 
 class Price(_Strict):

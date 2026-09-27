@@ -1,18 +1,19 @@
 # Agent roster and orchestration limits. Prompts live in prompts/<name>.md.
 debate_rounds: 2
-validator_max_loops: 2
+validator_max_loops: 2          # fix rounds after a validator (or numeric check) rejects output
+agent_max_steps: 8              # LLM turns per agent run (tool calls + final answer)
 research_loop_max_steps: 12
 
 agents:
-  supply_demand_analyst: {enabled: true, tools: [eia_inventories, cot_positioning, term_structure, crack_spread, seasonality]}
-  technical_analyst: {enabled: true, tools: [price_history, indicators, regime, support_resistance]}
-  sentiment_analyst: {enabled: true, tools: [news_fetch, headline_scores, event_calendar]}
-  macro_analyst: {enabled: true, tools: [fred_series, relative_strength]}
-  forecast_interpreter: {enabled: true, tools: [forecast, leaderboard]}
+  supply_demand_analyst: {enabled: true, tools: [inventories, cot_positioning, crack_spread, term_structure, seasonality, data_quality]}
+  technical_analyst: {enabled: true, tools: [price_technicals, seasonality, data_quality]}
+  sentiment_analyst: {enabled: true, tools: [news_headlines, event_calendar, cot_positioning]}
+  macro_analyst: {enabled: true, tools: [macro_series, relative_strength, event_calendar]}
+  forecast_interpreter: {enabled: true, tools: [forecast, forecast_leaderboard]}
   bull_researcher: {enabled: true, tools: []}
   bear_researcher: {enabled: true, tools: []}
-  risk_reviewer: {enabled: true, tools: [risk_metrics, position_size, risk_limits]}
-  validator: {enabled: true, tools: [scratchpad]}
+  risk_reviewer: {enabled: true, tools: [risk_metrics, risk_limits, price_technicals, forecast]}
+  validator: {enabled: true, tools: []}
   synthesizer: {enabled: true, tools: []}
 
 # Final rating is computed in code from these weights; the synthesizer only explains it.
@@ -21,4 +22,9 @@ decision_weights:
   technical_analyst: 0.20
   sentiment_analyst: 0.10
   macro_analyst: 0.15
-  forecast: 0.25                # scaled down to 0 when the forecast has no measurable edge
+  forecast: 0.25                # contributes 0 when the forecast has no measurable edge
+
+# score = sum(weight x stance x confidence) in [-1, 1]; stance: bullish +1, bearish -1
+rating_thresholds:
+  strong: 0.45                  # |score| >= strong -> Strong Buy / Strong Sell
+  weak: 0.15                    # |score| >= weak   -> Buy / Sell; below -> Hold
