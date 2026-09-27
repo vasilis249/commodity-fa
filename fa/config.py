@@ -50,6 +50,7 @@ class Instrument(_Strict):
     settle_time: time  # daily settlement/close, local to `timezone`
     timezone: str
     contract_root: str | None = None  # e.g. "CL"; individual contracts are CLZ26 etc.
+    contract_suffix: str | None = None  # Yahoo suffix for single contracts, e.g. ".NYM"
     cot_market_code: str | None = None
     eia_series: dict[str, str] = Field(default_factory=dict)
     fred_spot: str | None = None
@@ -129,6 +130,7 @@ class DataConfig(_Strict):
     quality: QualitySettings
     cache_ttl: CacheTTL
     news_feeds: list[str]
+    curve_contracts: int = Field(ge=2, le=24)
     providers: dict[str, ProviderLimits]
 
     @model_validator(mode="after")

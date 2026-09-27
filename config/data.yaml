@@ -16,6 +16,7 @@ universe:
     settle_time: "14:30"
     timezone: America/New_York
     contract_root: CL
+    contract_suffix: .NYM          # Yahoo single-contract symbols, e.g. CLZ26.NYM
     news_queries: ["WTI crude oil price", "OPEC oil supply"]
     roll_rule: nymex_cl          # expires 3 business days before the 25th of the month prior to delivery
     cot_market_code: "067651"    # CFTC: WTI-PHYSICAL - NYMEX
@@ -36,6 +37,7 @@ universe:
     settle_time: "14:30"
     timezone: America/New_York
     contract_root: BZ
+    contract_suffix: .NYM          # Yahoo single-contract symbols, e.g. BZZ26.NYM
     news_queries: ["Brent crude oil price", "OPEC oil supply"]
     roll_rule: ice_brent         # last business day of the second month preceding delivery
     cot_market_code: "06765T"    # CFTC: BRENT LAST DAY - NYMEX (ICE Europe publishes its own COT)
@@ -52,6 +54,7 @@ universe:
     settle_time: "14:30"
     timezone: America/New_York
     contract_root: NG
+    contract_suffix: .NYM          # Yahoo single-contract symbols, e.g. NGZ26.NYM
     news_queries: ["Henry Hub natural gas price", "US natural gas storage"]
     roll_rule: nymex_ng          # expires 3 business days before the first calendar day of delivery month
     cot_market_code: "023651"    # CFTC: NAT GAS NYME - NYMEX
@@ -84,6 +87,7 @@ universe:
     settle_time: "14:30"
     timezone: America/New_York
     contract_root: HO
+    contract_suffix: .NYM          # Yahoo single-contract symbols, e.g. HOZ26.NYM
     news_queries: ["diesel heating oil prices", "distillate inventories"]
     roll_rule: nymex_last_bd_prior_month
     cot_market_code: "022651"    # CFTC: NY HARBOR ULSD - NYMEX
@@ -101,6 +105,7 @@ universe:
     settle_time: "14:30"
     timezone: America/New_York
     contract_root: RB
+    contract_suffix: .NYM          # Yahoo single-contract symbols, e.g. RBZ26.NYM
     news_queries: ["gasoline prices RBOB", "US gasoline demand"]
     roll_rule: nymex_last_bd_prior_month
     cot_market_code: "111659"    # CFTC: GASOLINE RBOB - NYMEX
@@ -155,6 +160,9 @@ cache_ttl:
   cot_hours: 24
   fred_hours: 24
   news_hours: 1
+
+# Listed contracts fetched for the term-structure snapshot (M1..Mn).
+curve_contracts: 6
 
 # General energy news feeds (RSS), in addition to per-instrument Google News queries.
 news_feeds:

@@ -154,7 +154,8 @@ def adjusted_returns(prices: pd.DataFrame, roll_events: list[RollEvent]) -> pd.D
 
     Columns added: `ret` (log return, NaN when masked), `mask_reason`
     ("roll" | "nonpositive_price" | "missing" | ""), `close_adj` (continuous close
-    anchored at the latest close; masked returns count as zero).
+    anchored at the latest close; masked returns count as zero), and
+    `open_adj`/`high_adj`/`low_adj` scaled by the same factor.
     """
     out = prices.copy()
     close = out["close"].astype(float)
@@ -174,6 +175,11 @@ def adjusted_returns(prices: pd.DataFrame, roll_events: list[RollEvent]) -> pd.D
     out["ret"] = ret
     out["mask_reason"] = reason
     out["close_adj"] = _anchor_to_last(close, ret)
+    # same back-adjustment factor for open/high/low (factor is undefined on close <= 0)
+    factor = (out["close_adj"] / close).where(close > 0).ffill().bfill()
+    for col in ("open", "high", "low"):
+        if col in out:
+            out[f"{col}_adj"] = out[col] * factor
     return out
 
 

@@ -32,7 +32,7 @@ from fa.data.providers.fred import FREDProvider
 from fa.data.providers.news import NewsProvider
 from fa.data.providers.yahoo import YahooProvider
 from fa.data.quality import QualityReport, check_prices
-from fa.data.rolls import RollEvent, roll_adjust
+from fa.data.rolls import RollEvent, contract_code, expiry_date, roll_adjust
 
 log = logging.getLogger(__name__)
 
@@ -198,21 +198,85 @@ class DataService:
     def instrument(self, symbol: str) -> Instrument:
         return self.cfg.data.instrument(symbol) or adhoc_instrument(symbol)
 
-    def prices(self, symbol: str, years: float | None = None, refresh: bool = False) -> PriceData:
-        """Daily prices with roll/bad-price masked returns and a quality report."""
+    def prices(
+        self,
+        symbol: str,
+        years: float | None = None,
+        refresh: bool = False,
+        as_of: date | None = None,
+    ) -> PriceData:
+        """Daily prices with roll/bad-price masked returns and a quality report.
+
+        With `as_of`, bars after that session are dropped *before* roll detection and
+        quality checks, so nothing computed here can see data after `as_of`.
+        """
         inst = self.instrument(symbol)
         years = years or self.cfg.data.default_history_years
         today = self.now().date()
-        start = today - timedelta(days=round(365.25 * years))
+        end = min(as_of, today) if as_of else today
+        start = end - timedelta(days=round(365.25 * years))
         raw, info = self.ranged(
             "yahoo", symbol, start, today, self.cfg.data.cache_ttl.prices_hours, refresh
         )
+        raw = raw.loc[: pd.Timestamp(end)]
+        if raw.empty:
+            raise DataUnavailable(f"{symbol}: no prices on or before {end}")
         calendar = calendar_for_exchange(inst.exchange)
         adjusted, events = roll_adjust(raw, inst.roll_rule, calendar, self.cfg.data.rolls)
-        report = check_prices(
-            raw, inst, self.cfg.data.quality, events, adjusted["ret"], today=today
-        )
+        report = check_prices(raw, inst, self.cfg.data.quality, events, adjusted["ret"], today=end)
         return PriceData(inst, adjusted, events, report, info)
+
+    def curve(
+        self, symbol: str, contracts: int | None = None, refresh: bool = False
+    ) -> tuple[pd.DataFrame, list[FetchInfo]]:
+        """Latest settlement of the next `contracts` listed contract months.
+
+        Columns: contract, delivery, expiry, settle, settle_date. Only the live curve is
+        available (Yahoo drops expired contracts), so there is no historical as-of.
+        """
+        inst = self.instrument(symbol)
+        if not (inst.contract_root and inst.contract_suffix) or inst.roll_rule is RollRule.NONE:
+            raise DataUnavailable(f"{symbol}: no single-contract symbols configured")
+        n = contracts or self.cfg.data.curve_contracts
+        today = self.now().date()
+        calendar = calendar_for_exchange(inst.exchange)
+        rows: list[dict[str, object]] = []
+        infos: list[FetchInfo] = []
+        y, m = today.year, today.month
+        while len(rows) < n and (y - today.year) * 12 + (m - today.month) < n + 24:
+            exp = expiry_date(inst.roll_rule, y, m, calendar)
+            if exp >= today:
+                code = contract_code(inst.contract_root, y, m) + inst.contract_suffix
+                try:
+                    frame, info = self.ranged(
+                        "yahoo",
+                        code,
+                        today - timedelta(days=30),
+                        today,
+                        self.cfg.data.cache_ttl.prices_hours,
+                        refresh,
+                    )
+                except DataUnavailable as exc:
+                    log.warning("curve: %s unavailable (%s)", code, exc)
+                else:
+                    last = frame["close"].dropna()
+                    if not last.empty:
+                        rows.append(
+                            {
+                                "contract": code.removesuffix(inst.contract_suffix),
+                                "delivery": f"{y}-{m:02d}",
+                                "expiry": exp,
+                                "settle": float(last.iloc[-1]),
+                                "settle_date": last.index[-1].date(),
+                            }
+                        )
+                        infos.append(info)
+            m += 1
+            if m == 13:
+                y, m = y + 1, 1
+        if len(rows) < 2:
+            raise DataUnavailable(f"{symbol}: fewer than 2 listed contracts found")
+        return pd.DataFrame(rows), infos
 
     # --- fundamentals / positioning / macro ---------------------------------------------
 

@@ -61,6 +61,47 @@ def config_check(config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR) -> None:
 
 
 @app.command()
+def analyze(
+    symbol: str,
+    no_llm: Annotated[
+        bool, typer.Option("--no-llm", help="Numeric snapshot only (the only mode until Phase 4).")
+    ] = False,
+    as_of: Annotated[
+        str | None, typer.Option("--as-of", help="Decision date YYYY-MM-DD (point in time).")
+    ] = None,
+    offline: Annotated[bool, typer.Option("--offline", help="Use cached data only.")] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the snapshot as JSON.")] = False,
+    curve: Annotated[bool, typer.Option("--curve/--no-curve", help="Fetch the live curve.")] = True,
+    config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR,
+) -> None:
+    """Numeric snapshot: price, technicals, risk, seasonality, inventories, COT, curve."""
+    from datetime import date
+
+    from fa.analytics.snapshot import build_snapshot
+    from fa.data.http import DataUnavailable
+    from fa.data.service import DataService
+    from fa.reports.snapshot_text import render
+
+    cfg = _load_or_exit(config_dir)
+    try:
+        snap = build_snapshot(
+            DataService(cfg, offline=offline),
+            symbol,
+            as_of=date.fromisoformat(as_of) if as_of else None,
+            include_curve=curve,
+        )
+    except DataUnavailable as exc:
+        typer.secho(f"Data unavailable: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    if as_json:
+        typer.echo(snap.model_dump_json(indent=2))
+        return
+    typer.echo(render(snap))
+    if not no_llm:
+        typer.secho("\n(LLM analysis arrives in Phase 4; this is the numeric snapshot.)", dim=True)
+
+
+@app.command()
 def universe(config_dir: ConfigDirOpt = DEFAULT_CONFIG_DIR) -> None:
     """List the configured instruments."""
     cfg = _load_or_exit(config_dir)
