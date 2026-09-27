@@ -106,6 +106,8 @@ class FakeLLM:
     lie_always: set[str] = field(default_factory=set)
     refuse: set[str] = field(default_factory=set)
     flag_once: set[str] = field(default_factory=set)
+    flag_always: set[str] = field(default_factory=set)  # validator never accepts these
+    flag_stance: set[str] = field(default_factory=set)  # validator rejects their stance
     reject_format: bool = False
     stance: str = "bullish"
     calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
@@ -168,6 +170,27 @@ class FakeLLM:
             issues = []
             payload = json.loads(next(m["content"] for m in messages if m["role"] == "user"))
             for st in payload["statements"]:
+                is_stance = st["statement"].startswith("stance:")
+                if st["agent"] in self.flag_stance and is_stance:
+                    issues.append(
+                        {
+                            "agent": st["agent"],
+                            "statement": st["statement"],
+                            "problem": "evidence is mixed",
+                        }
+                    )
+                    continue
+                if st["agent"] in self.flag_always and not is_stance:
+                    issues.append(
+                        {
+                            "agent": st["agent"],
+                            "statement": st["statement"],
+                            "problem": "reversed sign",
+                        }
+                    )
+                    continue
+                if is_stance:
+                    continue
                 if st["agent"] in self.flag_once and st["agent"] not in self._flagged:
                     self._flagged.add(st["agent"])
                     issues.append(

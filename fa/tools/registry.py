@@ -121,7 +121,9 @@ class ToolRegistry:
                 payload = compact(tool.handler(ctx, args))
                 error = False
             except ValidationError as exc:
-                payload = {"error": f"invalid arguments: {exc.errors(include_url=False)}"}
+                # no input echo: an agent must not be able to mint citable numbers
+                errs = exc.errors(include_url=False, include_input=False, include_context=False)
+                payload = {"error": "invalid arguments", "details": [e["msg"] for e in errs]}
             except (ToolError, DataUnavailable) as exc:
                 payload = {"error": str(exc)}
         if isinstance(payload, dict):

@@ -154,3 +154,72 @@ def test_cli_report_requires_api_key(monkeypatch) -> None:
     )
     res = CliRunner().invoke(app, ["report", "CL=F", "--offline"])
     assert res.exit_code == 2 and "ANTHROPIC_API_KEY" in res.output
+
+
+# --- Phase 4 audit regressions ------------------------------------------------------
+
+
+def test_statements_still_rejected_are_removed(setup) -> None:
+    report = _run(setup, FakeLLM(flag_always={"technical_analyst"}))
+    assert report.validation.unresolved_validator_issues
+    tech = next(s for s in report.sections if s.agent == "technical_analyst")
+    for issue in report.validation.unresolved_validator_issues:
+        statement = issue.split(": ", 1)[1].split(" -> ")[0]
+        assert statement not in tech.view.model_dump_json()  # type: ignore[union-attr]
+
+
+def test_unsupported_stance_is_neutralized(setup) -> None:
+    report = _run(setup, FakeLLM(flag_stance={"supply_demand_analyst"}))
+    part = next(c for c in report.decision.components if c.name == "supply_demand_analyst")
+    assert part.contribution == 0  # flagged stance cannot move the rating
+
+
+def test_past_as_of_carries_lookahead_warning(setup) -> None:
+    from datetime import date
+
+    report = _run(setup, FakeLLM(), as_of=date(2026, 6, 30))
+    assert report.lookahead_warning and "not as evidence of skill" in report.lookahead_warning
+    assert "Warning" in to_markdown(report)
+    live = _run(setup, FakeLLM())
+    assert live.lookahead_warning is None
+
+
+def test_news_after_as_of_is_not_shown(setup) -> None:
+    from datetime import date
+
+    from fa.orchestration.scratchpad import Scratchpad
+    from fa.tools.market import NewsArgs, news_headlines
+    from fa.tools.registry import RunContext
+
+    cfg, svc, tmp = setup
+    ctx = RunContext(
+        cfg=cfg, svc=svc, symbol="CL=F", as_of=date(2026, 9, 25), scratchpad=Scratchpad(tmp / "p")
+    )
+    out = news_headlines(ctx, NewsArgs(limit=40))
+    settle = "2026-09-25T18:30:00+00:00"  # 14:30 ET
+    assert all(h["published_at"] <= settle for h in out["headlines"])
+
+
+def test_parallel_agents_cannot_overspend(setup) -> None:
+    """Audit finding: 5 parallel analysts all passed preflight before any charge.
+    Each fake call costs exactly its preflight estimate, so with reservations the run
+    can never exceed the budget; without them it overshoots about 2x."""
+    import json
+    import time
+
+    cfg, svc, tmp = setup
+    tiny = cfg.models.budget.model_copy(update={"max_usd_per_run": 0.08})
+    cfg = cfg.model_copy(update={"models": cfg.models.model_copy(update={"budget": tiny})})
+    frac = tiny.preflight_output_fraction
+
+    class Slow(FakeLLM):
+        def create(self, agent, **params):
+            time.sleep(0.05)  # every thread reaches its preflight before any charge
+            resp = super().create(agent, **params)
+            resp.usage.input_tokens = len(json.dumps(params, default=str)) // 3
+            resp.usage.output_tokens = int(params["max_tokens"] * frac)
+            return resp
+
+    with pytest.raises(PipelineAborted) as info:
+        run_report(cfg, svc, "CL=F", Slow(), runs_dir=tmp / "runs", parallel=True)
+    assert info.value.spent_usd <= 0.08 + 1e-9

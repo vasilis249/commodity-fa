@@ -17,11 +17,15 @@ log = logging.getLogger(__name__)
 USER_AGENT = f"commodity-fa/{__version__} (personal research tool)"
 RETRY_STATUS = {408, 425, 429, 500, 502, 503, 504}
 _SECRET_PARAM = re.compile(r"(api_key|apikey|token|key)=[^&\s'\")]+", re.IGNORECASE)
+_SECRET_FIELD = re.compile(
+    r"([\"']?(?:api_key|apikey|token|secret|password)[\"']?\s*:\s*[\"']?)[^\"',}\s]+",
+    re.IGNORECASE,
+)
 
 
 def redact(text: str) -> str:
-    """Hide secrets passed as URL query parameters (errors often echo the URL)."""
-    return _SECRET_PARAM.sub(r"\1=***", text)
+    """Hide secrets in URL query strings and in dict/JSON text (errors often echo both)."""
+    return _SECRET_FIELD.sub(r"\1***", _SECRET_PARAM.sub(r"\1=***", text))
 
 
 class DataUnavailable(RuntimeError):

@@ -16,6 +16,7 @@ uv run fa universe
 uv run fa data prices CL=F [--years 10] [--offline] [--refresh] [-v]   # prices + roll masks + quality
 uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
 uv run fa forecast CL=F [--models naive,lightgbm] [--folds N] [--refresh] [--json]
+uv run fa report CL=F [--as-of D] [--rounds N] [--budget USD]   # agents; needs ANTHROPIC_API_KEY
 uv run fa data cache                                                     # list cache entries
 uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
 ```
@@ -75,6 +76,8 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - **Curve as of a date:** settles must be on or before `as_of`, and contracts contiguous from the front month (`DataService.curve(as_of=...)`).
 - **Intraday bar fields:** a bar's high, low and volume may include trading after the settlement (the decision time), so forecasting features lag them one bar.
 - **Calendar roll windows** extend to expiry + window_after + mask_after, so they cover every volume-detected splice. `embargo_days` must be ≥ window_before + window_after (the label mask's hindsight); config validation enforces this.
+- **Tools honour `as_of`.** News is cut at the as_of settlement, and is live-only beyond 3 days back. Error payloads never echo agent input and can't be cited.
+- **Phase 5 anonymization must transform payloads inside `ToolRegistry.call`**, before `compact` and the scratchpad, so the claim checker validates exactly what the model saw. It must strip dates, contract codes, units and benchmark names, and rebase prices. Tool descriptions and per-agent tool sets also reveal the commodity. The Phase 4 audit listed all of these.
 - **Model selection is itself a fit.** Never report the leaderboard winner's skill as out of sample without the `auto_select` comparison.
 - **Publisher disruptions:** `config/data.yaml: release_overrides` pushes `available_at` late for government-shutdown periods (CFTC COT 2018–19 and 2025). These dates are conservative upper bounds.
 - **Negative prices** (WTI at −37.63 on 2020-04-20) make log returns undefined. Flag them and handle them explicitly, never with a silent `NaN`/`inf`.
@@ -103,6 +106,18 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - The leaderboard is cached in `leaderboards/`, keyed by symbol, last date, config and models.
 - **Any new feature** must pass `assert_causal` (`fa/forecasting/leakage.py`), with cut points inside roll windows. Deliberate leaks (shift(-1), full-sample z-score, centered window, bfill, interpolate, period-date join) are tested to be caught.
 
+## Agents (Phase 4)
+- Flow (`fa/orchestration/pipeline.py`):
+  1. Five analysts run in parallel threads and call tools (`fa/tools/market.py`). Every result gets an id T#, and its exact payload goes to the scratchpad.
+  2. A code numeric check runs, then the LLM validator checks meaning and each analyst's stance against its own evidence.
+  3. A bull/bear debate (`debate_rounds`), then the risk reviewer.
+  4. `decide()` computes the rating in code; the synthesizer explains it, then gets its own checks.
+- **Numbers:** `fa/agents/claims.py`. Every digit run in LLM text is a claim, unless it is a whitelisted identifier, a small count, a duration or a year in date context. Each claim must equal a value in a cited, non-error result after rounding to the precision written. Percent claims match fractions ×100, or raw values only in percentage fields. Sentences that still fail after `validator_max_loops` fixes are removed and listed in the report. Statements the validator still flags are removed too. A stance it still flags gets confidence 0.
+- **LLM calls** (`fa/agents/base.py`): adaptive thinking, `output_config.effort` plus a JSON-schema `format` (falling back to JSON-by-instruction on a 400), top-level `cache_control`, and an append-only history. There's no temperature and no forced `tool_choice`. `AgentSession.revise()` continues the same conversation.
+- **Budget** (`fa/orchestration/budget.py`): each call reserves its estimated cost under a lock (input priced at the cache-write rate) and settles it on charge, so parallel agents can't overspend. `BudgetExceeded` becomes `PipelineAborted` with the scratchpad kept.
+- **Prompts** are in `prompts/*.md` with a `version:` header, plus `_common.md`. The version is logged per call. Bump it whenever the text changes.
+- **Reports** go to `reports/<SYM>_<date>.{json,md,html}`. A past `as_of` (more than 3 days back) sets `lookahead_warning`: the agents may know what happened next.
+
 ## Conventions
 - Python 3.12, `uv`, `ruff` (line length 100), lenient `mypy`, `pytest`.
 - Small, readable modules. Add a dependency only when its phase needs it, and say why.
@@ -122,7 +137,7 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | 1 ✅ | Providers (yfinance, EIA, CFTC, FRED, RSS), cache, quality checks (gaps, rolls, negative prices, stale data) | 10 years of `CL=F` fetched twice; the second run hits the cache only; tests use fixtures |
 | 2 ✅ | Indicators, supply/demand, curve, seasonality, risk metrics | Reference-value tests; `fa analyze CL=F --no-llm` prints a snapshot |
 | 3 ✅ | Model ladder, walk-forward, leaderboard | `fa forecast CL=F`/`SPY` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
-| 4 | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
+| 4 ✅ | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
 | 5 | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
 | 6 | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |
 | 7 | Eval set (~30 verifiable questions), schema regression, README | Eval score reported; setup takes under 10 minutes |

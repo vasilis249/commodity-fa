@@ -124,3 +124,41 @@ def test_decision_is_computed_in_code(cfg: AppConfig) -> None:
     )
     assert decide({}, None, cfg.agents).rating == "Hold"
     assert forecast_signal(None) == (0.0, False, "forecast unavailable")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "WTI could reach $100 [T1].",  # was +-50 from trailing zeros
+        "WTI 72.3% [T1].",  # percent claim matched a raw price
+        "Target $95/bbl.",
+        "Range 150-160.",
+        "92.41/bbl",
+        "450mb.",
+        "Cut 150bp.",
+        "Seen at 1e5.",
+        "Gold at 2050.",
+        "NG at $3 [T1].",
+        "Stocks 426,000 [T1].",  # rounding claimed but not written
+    ],
+)
+def test_audit_counterexamples_are_caught(text: str) -> None:
+    results = {"T1": {"price": {"last_close": 72.31}, "inventories": [{"value": 426398}]}}
+    assert check_text(text, results) != []
+
+
+def test_error_results_are_not_citable(cfg: AppConfig, tmp_path: Path) -> None:
+    pad = Scratchpad(tmp_path)
+    ctx = RunContext(cfg=cfg, svc=None, symbol="X", as_of=None, scratchpad=pad)  # type: ignore[arg-type]
+    reg = ToolRegistry()
+    reg.register(Tool("t", "d", NoArgs, lambda c, a: {"v": 1.0}))
+    res = reg.call(ctx, "agent", "t", {"target_price": 147.35})
+    assert res.is_error and "147.35" not in str(res.payload)
+    assert check_text(f"WTI will reach 147.35 by December [{res.result_id}].", pad.results) != []
+
+
+def test_redaction_covers_dict_forms() -> None:
+    from fa.data.http import redact
+
+    for text in (str({"api_key": "S3CR3T"}), '{"api_key": "S3CR3T"}', "u?api_key=S3CR3T&x=1"):
+        assert "S3CR3T" not in redact(text)

@@ -127,8 +127,20 @@ def _strip(state: RunState, agent: str, output: BaseModel, sentences: list[str])
     return type(output).model_validate(clean(output.model_dump(mode="json")))
 
 
+STANCE_PREFIX = "stance:"
+
+
 def _statements(agent: str, output: BaseModel) -> list[dict[str, Any]]:
     out = []
+    if isinstance(output, AnalystView):  # the stance itself is a claim to validate
+        out.append(
+            {
+                "agent": agent,
+                "statement": (
+                    f"{STANCE_PREFIX} {output.stance} (confidence {output.confidence:.2f})"
+                ),
+            }
+        )
 
     def walk(v: Any) -> None:
         if isinstance(v, str):
@@ -176,6 +188,9 @@ def validate_meaning(state: RunState, outputs: dict[str, BaseModel]) -> dict[str
             return outputs
         if loop == state.cfg.agents.validator_max_loops - 1:
             state.unresolved += [f"{i.agent}: {i.statement} -> {i.problem}" for i in issues]
+            for agent in sorted({i.agent for i in issues}):
+                flagged = [i.statement for i in issues if i.agent == agent]
+                outputs[agent] = _drop_unsupported(state, agent, outputs[agent], flagged)
             break
         for agent in sorted({i.agent for i in issues}):
             text = "\n".join(f'- "{i.statement}": {i.problem}' for i in issues if i.agent == agent)
@@ -186,6 +201,18 @@ def validate_meaning(state: RunState, outputs: dict[str, BaseModel]) -> dict[str
             )
             outputs[agent] = enforce_numbers(state, session, revised)
     return outputs
+
+
+def _drop_unsupported(
+    state: RunState, agent: str, output: BaseModel, statements: list[str]
+) -> BaseModel:
+    """Last resort after the fix loops: remove flagged text; an unsupported stance
+    is neutralized (confidence 0) so it cannot move the code-computed rating."""
+    if isinstance(output, AnalystView) and any(s.startswith(STANCE_PREFIX) for s in statements):
+        output = output.model_copy(update={"confidence": 0.0})
+        state.ctx.scratchpad.log("check", kind="stance_neutralized", agent=agent)
+    text = [s for s in statements if not s.startswith(STANCE_PREFIX)]
+    return _strip(state, agent, output, text) if text else output
 
 
 def _instrument_line(ctx: RunContext, snap: Snapshot) -> str:
@@ -316,6 +343,21 @@ def _key_numbers(
     return out
 
 
+LIVE_WINDOW_DAYS = 3
+
+
+def _lookahead_warning(as_of: date, today: date) -> str | None:
+    """The agents' own training data may cover what happened after a past as_of."""
+    if (today - as_of).days <= LIVE_WINDOW_DAYS:
+        return None
+    return (
+        f"Past-dated report (as of {as_of}). The LLM agents may already know what happened "
+        "after this date from their training data, even though every tool is cut at the "
+        "decision time. Treat this report as illustrative, not as evidence of skill; "
+        "anonymized backtests are the valid test."
+    )
+
+
 def run_report(
     cfg: AppConfig,
     svc: DataService,
@@ -421,6 +463,7 @@ def run_report(
             budget_usd=cfg.models.budget.max_usd_per_run,
         ),
         scratchpad=str(scratch.path),
+        lookahead_warning=_lookahead_warning(snap.as_of, svc.now().date()),
     )
     scratch.log("report", rating=report.rating, conviction=report.conviction)
     return report

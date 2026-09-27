@@ -28,6 +28,7 @@ def to_markdown(r: Report) -> str:
         f"*As of {r.as_of} settlement · generated {r.generated_at:%Y-%m-%d %H:%M} UTC"
         f" · run `{r.run_id}`*",
         "",
+        *([f"> **Warning:** {r.lookahead_warning}", ""] if r.lookahead_warning else []),
         f"## Summary: **{r.rating}** (conviction {r.conviction:.2f})",
         "",
         r.thesis,
@@ -39,6 +40,9 @@ def to_markdown(r: Report) -> str:
             for c in d.components
         ],
         f"| **score** | | | **{d.score:+.3f}** | computed in code |",
+        "",
+        "*Stances and confidences are LLM judgments (each checked by the validator against its "
+        "own evidence); the weighting and the rating are computed in code.*",
         "",
         f"## Price forecast ({r.unit})",
         "",
@@ -134,7 +138,9 @@ def to_html(r: Report) -> str:
         if in_list:
             body.append("</ul>")
             in_list = False
-        if line.startswith("## "):
+        if line.startswith("> "):
+            body.append(f"<blockquote>{esc[5:]}</blockquote>")
+        elif line.startswith("## "):
             body.append(f"<h2>{esc[3:]}</h2>")
         elif line.startswith("# "):
             body.append(f"<h1>{esc[2:]}</h1>")

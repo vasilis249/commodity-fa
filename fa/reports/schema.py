@@ -71,4 +71,5 @@ class Report(BaseModel):
     models: dict[str, str]  # agent -> "model (effort), prompt vN"
     cost: CostSummary
     scratchpad: str
+    lookahead_warning: str | None = None
     disclaimer: str = DISCLAIMER

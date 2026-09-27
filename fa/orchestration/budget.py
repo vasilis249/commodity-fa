@@ -64,6 +64,7 @@ class CostTracker:
     tokens: int = 0
     calls: int = 0
     by_agent: dict[str, float] = field(default_factory=dict)
+    reserved_usd: float = 0.0  # estimates of calls in flight (parallel agents)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def _price(self, model: str) -> Price:
@@ -72,21 +73,37 @@ class CostTracker:
         return self.pricing[model]
 
     def preflight(self, model: str, est_input_tokens: int, max_tokens: int) -> float:
-        """Raise if this call could plausibly push the run over budget."""
+        """Reserve this call's estimated cost; raise if it could push the run over budget.
+
+        Input is priced at the cache-write rate (the first write of a cached prefix costs
+        1.25x). Reservations are held under the lock, so parallel agents cannot all pass
+        the check before any of them is charged. Settle with `charge(..., reserved=est)`.
+        """
         est_out = int(max_tokens * self.budget.preflight_output_fraction)
-        est = cost_usd(self._price(model), Usage(est_input_tokens, est_out))
-        if self.spent_usd + est > self.budget.max_usd_per_run:
-            raise BudgetExceeded(
-                f"next call (~${est:.3f}) would exceed the ${self.budget.max_usd_per_run:.2f} "
-                f"budget (spent ${self.spent_usd:.3f})"
-            )
-        if self.tokens + est_input_tokens + est_out > self.budget.max_tokens_per_run:
-            raise BudgetExceeded(f"token budget {self.budget.max_tokens_per_run} would be exceeded")
+        price = self._price(model)
+        est = cost_usd(price, Usage(0, est_out, est_input_tokens, 0))
+        with self._lock:
+            committed = self.spent_usd + self.reserved_usd
+            if committed + est > self.budget.max_usd_per_run:
+                raise BudgetExceeded(
+                    f"next call (~${est:.3f}) would exceed the ${self.budget.max_usd_per_run:.2f} "
+                    f"budget (spent ${self.spent_usd:.3f}, in flight ${self.reserved_usd:.3f})"
+                )
+            if self.tokens + est_input_tokens + est_out > self.budget.max_tokens_per_run:
+                raise BudgetExceeded(
+                    f"token budget {self.budget.max_tokens_per_run} would be exceeded"
+                )
+            self.reserved_usd += est
         return est
 
-    def charge(self, agent: str, model: str, usage: Usage) -> float:
+    def release(self, reserved: float) -> None:
+        with self._lock:
+            self.reserved_usd = max(0.0, self.reserved_usd - reserved)
+
+    def charge(self, agent: str, model: str, usage: Usage, reserved: float = 0.0) -> float:
         cost = cost_usd(self._price(model), usage)
         with self._lock:
+            self.reserved_usd = max(0.0, self.reserved_usd - reserved)
             self.spent_usd += cost
             self.tokens += usage.total
             self.calls += 1

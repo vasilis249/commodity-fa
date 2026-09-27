@@ -123,10 +123,11 @@ class AgentSession:
     def _call(self) -> Any:
         params = self._params()
         est_in = len(json.dumps(params, default=str)) // 3
-        self.costs.preflight(self.role.model, est_in, self.role.max_tokens)
+        reserved = self.costs.preflight(self.role.model, est_in, self.role.max_tokens)
         try:
             response = self.llm.create(self.agent, **params)
         except Exception as exc:
+            self.costs.release(reserved)
             if self.structured and _format_unsupported(exc):
                 self.structured = False  # fall back to JSON-by-instruction
                 self.messages.append(
@@ -139,7 +140,7 @@ class AgentSession:
                 return self._call()
             raise
         usage = Usage.from_response(getattr(response, "usage", None))
-        cost = self.costs.charge(self.agent, self.role.model, usage)
+        cost = self.costs.charge(self.agent, self.role.model, usage, reserved=reserved)
         self.ctx.scratchpad.log(
             "llm_call",
             agent=self.agent,
