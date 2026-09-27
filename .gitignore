@@ -1,0 +1,20 @@
+# secrets
+.env
+# local data / run artifacts
+/.cache/
+/.runs/
+/reports/
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+# os / editors
+.DS_Store
+.idea/
+.vscode/

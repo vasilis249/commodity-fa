@@ -1,0 +1,113 @@
+# Data layer config: universe, sources, cache, rate limits.
+# Commodity entries drive every layer (EIA / COT lookups, roll handling, units).
+# Add metals/ags later by appending entries; roll_rule must be one of fa.config.RollRule.
+
+cache_dir: .cache
+default_history_years: 10
+
+universe:
+  - symbol: "CL=F"
+    name: WTI crude oil (NYMEX front month)
+    asset_class: commodity
+    sector: energy
+    exchange: NYMEX
+    currency: USD
+    unit: USD/bbl
+    roll_rule: nymex_cl          # expires 3 business days before the 25th of the month prior to delivery
+    cot_market_code: "067651"    # CFTC: WTI-PHYSICAL - NYMEX
+    eia_series:                  # legacy series ids, served by EIA API v2 /seriesid/
+      crude_stocks_ex_spr: PET.WCESTUS1.W
+      cushing_stocks: PET.W_EPC0_SAX_YCUOK_MBBL.W
+      crude_production: PET.WCRFPUS2.W
+      refinery_utilization: PET.WPULEUS3.W
+    fred_spot: DCOILWTICO
+
+  - symbol: "BZ=F"
+    name: Brent crude oil (ICE front month)
+    asset_class: commodity
+    sector: energy
+    exchange: ICE
+    currency: USD
+    unit: USD/bbl
+    roll_rule: ice_brent         # last business day of the second month preceding delivery
+    cot_market_code: "06765T"    # CFTC: BRENT LAST DAY - NYMEX (ICE Europe publishes its own COT)
+    eia_series: {}
+    fred_spot: DCOILBRENTEU
+
+  - symbol: "NG=F"
+    name: Henry Hub natural gas (NYMEX front month)
+    asset_class: commodity
+    sector: energy
+    exchange: NYMEX
+    currency: USD
+    unit: USD/MMBtu
+    roll_rule: nymex_ng          # expires 3 business days before the first calendar day of delivery month
+    cot_market_code: "023651"    # CFTC: NAT GAS NYME - NYMEX
+    eia_series:
+      working_gas_storage_l48: NG.NW2_EPG0_SWO_R48_BCF.W
+    fred_spot: DHHNGSP
+
+  - symbol: "TTF=F"
+    name: Dutch TTF natural gas (ICE Endex front month)
+    asset_class: commodity
+    sector: energy
+    exchange: ICE Endex
+    currency: EUR
+    unit: EUR/MWh
+    roll_rule: ice_endex_ttf     # expires 2 business days before the first calendar day of delivery month
+    cot_market_code: null        # not in CFTC reports
+    eia_series: {}
+    fred_spot: null
+
+  - symbol: "HO=F"
+    name: NY Harbor ULSD / heating oil (NYMEX front month)
+    asset_class: commodity
+    sector: energy
+    exchange: NYMEX
+    currency: USD
+    unit: USD/gal
+    roll_rule: nymex_last_bd_prior_month
+    cot_market_code: "022651"    # CFTC: NY HARBOR ULSD - NYMEX
+    eia_series:
+      distillate_stocks: PET.WDISTUS1.W
+    fred_spot: null
+
+  - symbol: "RB=F"
+    name: RBOB gasoline (NYMEX front month)
+    asset_class: commodity
+    sector: energy
+    exchange: NYMEX
+    currency: USD
+    unit: USD/gal
+    roll_rule: nymex_last_bd_prior_month
+    cot_market_code: "111659"    # CFTC: GASOLINE RBOB - NYMEX
+    eia_series:
+      gasoline_stocks: PET.WGTSTUS1.W
+    fred_spot: null
+
+  # Tradable proxies: no roll handling (the fund rolls internally; roll cost is in its NAV).
+  - {symbol: USO, name: United States Oil Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
+  - {symbol: UNG, name: United States Natural Gas Fund, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
+  - {symbol: XLE, name: Energy Select Sector SPDR, asset_class: etf, sector: energy, exchange: NYSE Arca, currency: USD, unit: USD/share, roll_rule: none}
+
+# Macro series (FRED) shared by all assets.
+fred_macro:
+  broad_dollar: DTWEXBGS
+  fed_funds: DFF
+  ust_2y: DGS2
+  ust_10y: DGS10
+  breakeven_10y: T10YIE
+  industrial_production: INDPRO
+
+# Release timing used for point-in-time joins (data is usable only AFTER release).
+release_lags:
+  eia_petroleum_weekly: {period_end: friday, released: wednesday, time_et: "10:30"}
+  eia_gas_storage_weekly: {period_end: friday, released: thursday, time_et: "10:30"}
+  cftc_cot: {period_end: tuesday, released: friday, time_et: "15:30"}
+
+providers:
+  yfinance: {min_interval_s: 1.0, max_retries: 4}
+  eia: {min_interval_s: 0.5, max_retries: 4}
+  cftc: {min_interval_s: 0.5, max_retries: 4}
+  fred: {min_interval_s: 0.5, max_retries: 4}
+  news_rss: {min_interval_s: 2.0, max_retries: 2}

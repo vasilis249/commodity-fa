@@ -1,0 +1,26 @@
+# Forecasting engine config. Target = log returns; bands converted back to price for display.
+target: log_return
+horizons: [1, 5, 20]            # trading days
+quantiles: [0.1, 0.5, 0.9]
+interval_coverage_target: 0.8
+
+walk_forward:
+  min_train_days: 756           # ~3 years before the first forecast
+  step_days: 20                 # refit cadence
+  purge_days: 20                # >= max horizon, so overlapping labels never leak
+  embargo_days: 5
+  max_folds: 40
+
+models:                         # the ladder, cheapest first
+  naive: {enabled: true}
+  drift: {enabled: true}
+  auto_arima: {enabled: true}
+  auto_ets: {enabled: true}
+  lightgbm: {enabled: true}
+  chronos2: {enabled: false}    # needs `uv sync --extra foundation`
+  timesfm: {enabled: false}     # latest weights are NON-COMMERCIAL licensed; opt-in only
+  ensemble: {enabled: true}     # weights learned on validation folds only
+
+skill:
+  baseline: naive               # a model claims skill only if it beats this out-of-sample
+  significance_alpha: 0.05      # binomial test for directional accuracy

@@ -1,0 +1,293 @@
+"""Load and validate config/*.yaml and secrets from .env.
+
+Every YAML file maps to a Pydantic model; invalid config fails loudly at load time.
+Secrets are read by pydantic-settings and never printed or logged.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_CONFIG_DIR = REPO_ROOT / "config"
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+# --- data.yaml -----------------------------------------------------------------------
+
+
+class RollRule(StrEnum):
+    """How a continuous futures series rolls; implemented in the data layer (Phase 1)."""
+
+    NYMEX_CL = "nymex_cl"
+    NYMEX_NG = "nymex_ng"
+    NYMEX_LAST_BD_PRIOR_MONTH = "nymex_last_bd_prior_month"
+    ICE_BRENT = "ice_brent"
+    ICE_ENDEX_TTF = "ice_endex_ttf"
+    NONE = "none"
+
+
+class Instrument(_Strict):
+    symbol: str
+    name: str
+    asset_class: Literal["commodity", "etf", "equity", "index"]
+    sector: str
+    exchange: str
+    currency: str
+    unit: str
+    roll_rule: RollRule
+    cot_market_code: str | None = None
+    eia_series: dict[str, str] = Field(default_factory=dict)
+    fred_spot: str | None = None
+
+    @model_validator(mode="after")
+    def _roll_rule_matches_class(self) -> Instrument:
+        if self.asset_class == "commodity" and self.roll_rule is RollRule.NONE:
+            raise ValueError(f"{self.symbol}: futures need a roll_rule other than 'none'")
+        if self.asset_class != "commodity" and self.roll_rule is not RollRule.NONE:
+            raise ValueError(f"{self.symbol}: only commodity futures take a roll_rule")
+        return self
+
+
+class ReleaseLag(_Strict):
+    period_end: str
+    released: str
+    time_et: str
+
+
+class ProviderLimits(_Strict):
+    min_interval_s: float = Field(ge=0)
+    max_retries: int = Field(ge=0)
+
+
+class DataConfig(_Strict):
+    cache_dir: Path
+    default_history_years: int = Field(gt=0)
+    universe: list[Instrument]
+    fred_macro: dict[str, str]
+    release_lags: dict[str, ReleaseLag]
+    providers: dict[str, ProviderLimits]
+
+    @field_validator("universe")
+    @classmethod
+    def _unique_symbols(cls, v: list[Instrument]) -> list[Instrument]:
+        symbols = [i.symbol for i in v]
+        dupes = {s for s in symbols if symbols.count(s) > 1}
+        if dupes:
+            raise ValueError(f"duplicate symbols in universe: {sorted(dupes)}")
+        return v
+
+    def instrument(self, symbol: str) -> Instrument | None:
+        return next((i for i in self.universe if i.symbol == symbol), None)
+
+
+# --- forecasting.yaml ----------------------------------------------------------------
+
+
+class WalkForward(_Strict):
+    min_train_days: int = Field(gt=0)
+    step_days: int = Field(gt=0)
+    purge_days: int = Field(ge=0)
+    embargo_days: int = Field(ge=0)
+    max_folds: int = Field(gt=0)
+
+
+class ModelToggle(_Strict):
+    enabled: bool
+
+
+class Skill(_Strict):
+    baseline: str
+    significance_alpha: float = Field(gt=0, lt=1)
+
+
+class ForecastingConfig(_Strict):
+    target: Literal["log_return"]
+    horizons: list[int]
+    quantiles: list[float]
+    interval_coverage_target: float = Field(gt=0, lt=1)
+    walk_forward: WalkForward
+    models: dict[str, ModelToggle]
+    skill: Skill
+
+    @field_validator("horizons")
+    @classmethod
+    def _horizons_ascending(cls, v: list[int]) -> list[int]:
+        if not v or any(h <= 0 for h in v) or v != sorted(set(v)):
+            raise ValueError("horizons must be positive, unique and ascending")
+        return v
+
+    @field_validator("quantiles")
+    @classmethod
+    def _quantiles_valid(cls, v: list[float]) -> list[float]:
+        if not v or any(not 0 < q < 1 for q in v) or v != sorted(set(v)):
+            raise ValueError("quantiles must be unique, ascending and inside (0, 1)")
+        return v
+
+    @model_validator(mode="after")
+    def _purge_covers_horizon(self) -> ForecastingConfig:
+        # Labels overlap up to the longest horizon; a shorter purge leaks future returns.
+        if self.walk_forward.purge_days < max(self.horizons):
+            raise ValueError("walk_forward.purge_days must be >= the longest horizon")
+        if self.skill.baseline not in self.models:
+            raise ValueError(f"skill.baseline '{self.skill.baseline}' is not in models")
+        return self
+
+
+# --- agents.yaml ---------------------------------------------------------------------
+
+
+class AgentSpec(_Strict):
+    enabled: bool
+    tools: list[str]
+
+
+class AgentsConfig(_Strict):
+    debate_rounds: int = Field(ge=0, le=5)
+    validator_max_loops: int = Field(ge=0, le=5)
+    research_loop_max_steps: int = Field(gt=0)
+    agents: dict[str, AgentSpec]
+    decision_weights: dict[str, float]
+
+    @field_validator("decision_weights")
+    @classmethod
+    def _weights_sum_to_one(cls, v: dict[str, float]) -> dict[str, float]:
+        if any(w < 0 for w in v.values()) or abs(sum(v.values()) - 1.0) > 1e-9:
+            raise ValueError("decision_weights must be non-negative and sum to 1")
+        return v
+
+
+# --- models.yaml ---------------------------------------------------------------------
+
+
+class RoleSpec(_Strict):
+    model: str
+    effort: Literal["low", "medium", "high", "xhigh", "max"]
+    max_tokens: int = Field(gt=0)
+
+
+class Budget(_Strict):
+    max_usd_per_run: float = Field(gt=0)
+    max_usd_backtest: float = Field(gt=0)
+    max_tokens_per_run: int = Field(gt=0)
+
+
+class Price(_Strict):
+    input: float = Field(ge=0)
+    output: float = Field(ge=0)
+    cache_write: float = Field(ge=0)
+    cache_read: float = Field(ge=0)
+
+
+class ModelsConfig(_Strict):
+    default_role: str
+    roles: dict[str, RoleSpec]
+    agent_roles: dict[str, str]
+    budget: Budget
+    prompt_caching: bool
+    pricing: dict[str, Price]
+
+    @model_validator(mode="after")
+    def _references_resolve(self) -> ModelsConfig:
+        if self.default_role not in self.roles:
+            raise ValueError(f"default_role '{self.default_role}' is not a defined role")
+        for agent, role in self.agent_roles.items():
+            if role not in self.roles:
+                raise ValueError(f"agent '{agent}' maps to unknown role '{role}'")
+        for name, spec in self.roles.items():
+            if spec.model not in self.pricing:
+                raise ValueError(f"role '{name}' uses '{spec.model}', which has no pricing")
+        return self
+
+
+# --- risk.yaml -----------------------------------------------------------------------
+
+
+class BacktestCosts(_Strict):
+    cost_bps_per_side: float = Field(ge=0)
+    slippage_bps_per_side: float = Field(ge=0)
+    roll_cost_bps: float = Field(ge=0)
+    execution: Literal["next_open"]
+
+
+class RiskConfig(_Strict):
+    max_gross_exposure: float = Field(gt=0, le=1.0)  # paper only, no leverage
+    max_position_fraction: float = Field(gt=0, le=1.0)
+    vol_target_annual: float = Field(gt=0)
+    max_drawdown_stop: float = Field(gt=0, lt=1)
+    min_history_days: int = Field(gt=0)
+    backtest: BacktestCosts
+
+
+# --- secrets -------------------------------------------------------------------------
+
+
+class Secrets(BaseSettings):
+    """API keys from the environment or .env. Never log these values."""
+
+    model_config = SettingsConfigDict(env_file=REPO_ROOT / ".env", extra="ignore")
+
+    anthropic_api_key: SecretStr | None = None
+    eia_api_key: SecretStr | None = None
+    fred_api_key: SecretStr | None = None
+
+    def status(self) -> dict[str, bool]:
+        """Which keys are set, without exposing any value."""
+        return {name.upper(): getattr(self, name) is not None for name in type(self).model_fields}
+
+
+# --- top level -----------------------------------------------------------------------
+
+
+class AppConfig(_Strict):
+    config_dir: Path
+    data: DataConfig
+    forecasting: ForecastingConfig
+    agents: AgentsConfig
+    models: ModelsConfig
+    risk: RiskConfig
+
+    @model_validator(mode="after")
+    def _cross_file_checks(self) -> AppConfig:
+        missing = set(self.agents.agents) - set(self.models.agent_roles)
+        if missing:
+            raise ValueError(f"agents without a model role in models.yaml: {sorted(missing)}")
+        return self
+
+
+CONFIG_FILES: dict[str, type[BaseModel]] = {
+    "data": DataConfig,
+    "forecasting": ForecastingConfig,
+    "agents": AgentsConfig,
+    "models": ModelsConfig,
+    "risk": RiskConfig,
+}
+
+
+def _read_yaml(path: Path) -> dict[str, object]:
+    with path.open(encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path} must contain a YAML mapping")
+    return raw
+
+
+def load_config(config_dir: Path | str = DEFAULT_CONFIG_DIR) -> AppConfig:
+    """Load and validate every config file in `config_dir`."""
+    config_dir = Path(config_dir)
+    sections = {name: _read_yaml(config_dir / f"{name}.yaml") for name in CONFIG_FILES}
+    return AppConfig.model_validate({"config_dir": config_dir, **sections})
+
+
+def load_secrets() -> Secrets:
+    """Read API keys from the environment / .env (kept separate from YAML config)."""
+    return Secrets()

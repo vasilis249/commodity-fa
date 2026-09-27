@@ -1,0 +1,12 @@
+# Hard risk gates, enforced in code (never only in a prompt). Paper trading only.
+max_gross_exposure: 1.0         # fraction of equity; 1.0 = no leverage
+max_position_fraction: 0.25     # per instrument
+vol_target_annual: 0.20         # position sizing target
+max_drawdown_stop: 0.30         # suggested exposure goes to 0 beyond this drawdown
+min_history_days: 252           # refuse to size positions with less history
+
+backtest:
+  cost_bps_per_side: 10
+  slippage_bps_per_side: 0
+  roll_cost_bps: 0              # extra per-roll cost for continuous-futures backtests
+  execution: next_open

@@ -1,0 +1,24 @@
+# Agent roster and orchestration limits. Prompts live in prompts/<name>.md.
+debate_rounds: 2
+validator_max_loops: 2
+research_loop_max_steps: 12
+
+agents:
+  supply_demand_analyst: {enabled: true, tools: [eia_inventories, cot_positioning, term_structure, crack_spread, seasonality]}
+  technical_analyst: {enabled: true, tools: [price_history, indicators, regime, support_resistance]}
+  sentiment_analyst: {enabled: true, tools: [news_fetch, headline_scores, event_calendar]}
+  macro_analyst: {enabled: true, tools: [fred_series, relative_strength]}
+  forecast_interpreter: {enabled: true, tools: [forecast, leaderboard]}
+  bull_researcher: {enabled: true, tools: []}
+  bear_researcher: {enabled: true, tools: []}
+  risk_reviewer: {enabled: true, tools: [risk_metrics, position_size, risk_limits]}
+  validator: {enabled: true, tools: [scratchpad]}
+  synthesizer: {enabled: true, tools: []}
+
+# Final rating is computed in code from these weights; the synthesizer only explains it.
+decision_weights:
+  supply_demand_analyst: 0.30
+  technical_analyst: 0.20
+  sentiment_analyst: 0.10
+  macro_analyst: 0.15
+  forecast: 0.25                # scaled down to 0 when the forecast has no measurable edge

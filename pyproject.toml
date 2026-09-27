@@ -1,0 +1,51 @@
+[project]
+name = "commodity-fa"
+version = "0.0.1"
+description = "Energy-commodity analysis and probabilistic price forecasting research tool (paper only)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+fa = "fa.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fa"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -m 'not network'"
+markers = [
+    "network: test needs live network access (skipped by default; run with -m network)",
+]
