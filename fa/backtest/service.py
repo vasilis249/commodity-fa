@@ -7,11 +7,12 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from fa.backtest.engine import BacktestResult, CostModel, buy_and_hold, run_backtest
-from fa.backtest.metrics import Metrics, excess, summarize
+from fa.backtest.engine import BacktestResult, CostModel, buy_and_hold, pnl_bars, run_backtest
+from fa.backtest.metrics import Metrics, edge_pvalue, excess, summarize
 from fa.backtest.signals import first_valid, forecast_targets, sma_crossover, vol_targeted
 from fa.config import AppConfig
 from fa.data.calendars import calendar_for_exchange
@@ -30,6 +31,7 @@ class BacktestReport(BaseModel):
     strategy_metrics: Metrics
     benchmark_metrics: Metrics
     excess: dict[str, float | None]
+    edge_p_value: float | None  # one-sided, strategy mean daily return > buy-and-hold's
     notes: list[str]
     results_file: str | None = None
     generated_at: datetime
@@ -37,9 +39,9 @@ class BacktestReport(BaseModel):
 
 
 def bars_and_rolls(svc: DataService, symbol: str, ds: Dataset) -> tuple[pd.DataFrame, pd.Series]:
-    """Roll-adjusted open/close and roll sessions (expiry calendar, known in advance)."""
+    """P&L bars (`pnl_bars`) and roll sessions (expiry calendar, known in advance)."""
     frame = svc.prices(symbol, as_of=ds.dates[-1].date()).frame.reindex(ds.dates)
-    bars = pd.DataFrame({"open": frame["open_adj"], "close": frame["close_adj"]}, index=ds.dates)
+    bars = pnl_bars(frame)
     inst = svc.instrument(symbol)
     rolls = pd.Series(False, index=ds.dates)
     if inst.roll_rule.value != "none":
@@ -60,8 +62,38 @@ def compare(
         raise ValueError(f"{name}: the signal never produced a target")
     window = bars.loc[start:]
     strat = run_backtest(window, targets.loc[start:], costs, name, rolls.loc[start:])
-    bench = buy_and_hold(window, costs)
+    bench = buy_and_hold(window, costs, rolls.loc[start:])
     return strat, bench
+
+
+def accounting_notes(bars: pd.DataFrame, strat: BacktestResult, bench: BacktestResult) -> list[str]:
+    """What the P&L could not credit inside the backtest window."""
+    z = bars["zeroed"].reindex(strat.frame.index).iloc[1:]
+    held = strat.frame["position"].iloc[1:] != 0
+    notes = []
+    n_roll = int((z == "overnight").sum())
+    if n_roll:
+        notes.append(
+            f"{n_roll} roll sessions: the overnight gap (contract splice) earns nothing; the "
+            f"intraday move is credited ({int(((z == 'overnight') & held).sum())} while invested)."
+        )
+    bad = z == "both"
+    if bad.any():
+        reasons = bars["mask_reason"].reindex(z.index)[bad]
+        np_days = [str(d.date()) for d in reasons.index[reasons == "nonpositive_price"]]
+        if np_days:
+            notes.append(
+                "WARNING: non-positive prices on "
+                + ", ".join(np_days)
+                + f" (strategy {'invested' if held[bad].any() else 'flat'}, buy-and-hold "
+                f"{'invested' if (bench.frame['position'].iloc[1:][bad] != 0).any() else 'flat'}"
+                "): no return is defined, so these sessions earn nothing; a real position "
+                "could have lost far more."
+            )
+        n_missing = int((reasons == "missing").sum())
+        if n_missing:
+            notes.append(f"{n_missing} sessions with missing prices earn nothing.")
+    return notes
 
 
 def run_strategy(
@@ -82,7 +114,8 @@ def run_strategy(
         f"Costs: {cfg.risk.backtest.cost_bps_per_side:g} bps per side + "
         f"{cfg.risk.backtest.slippage_bps_per_side:g} bps slippage; "
         f"roll cost {cfg.risk.backtest.roll_cost_bps:g} bps per roll.",
-        "Targets decided at the close, executed at the next open; roll-adjusted prices.",
+        "Targets decided at the close, executed at the next open; P&L follows the held "
+        "front-month contract (contract splices earn nothing).",
     ]
     params: dict[str, Any] = {"long_short": bt.long_short, "vol_target": bt.vol_target}
     if strategy == "sma":
@@ -110,6 +143,22 @@ def run_strategy(
         )
     strat, bench = compare(bars, targets, rolls, costs, strategy)
     sm, bm = summarize(strat), summarize(bench)
+    notes += accounting_notes(bars, strat, bench)
+    p = edge_pvalue(strat, bench, bt.significance_block)
+    alpha = cfg.forecasting.skill.significance_alpha
+    if not np.isfinite(p) or p >= alpha:
+        shown = f"p={p:.2f}" if np.isfinite(p) else "too little data to test"
+        notes.insert(
+            0,
+            f"No measurable edge vs buy-and-hold ({shown}; one-sided batch-means test on "
+            f"daily return differences, {bt.significance_block}-session blocks).",
+        )
+    else:
+        notes.insert(
+            0,
+            f"Mean daily return above buy-and-hold (p={p:.3f}, one-sided batch-means test). "
+            "One backtest; not adjusted for other strategies or settings tried.",
+        )
     if sm.exposure is not None and sm.exposure < 0.05:
         notes.append(
             f"The signal was invested only {sm.exposure:.1%} of the time on average; its "
@@ -122,6 +171,7 @@ def run_strategy(
         strategy_metrics=sm,
         benchmark_metrics=bm,
         excess=excess(sm, bm),
+        edge_p_value=float(p) if np.isfinite(p) else None,
         notes=notes,
         generated_at=datetime.now(UTC),
     )

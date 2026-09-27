@@ -8,12 +8,14 @@ an allow-list of fields, never by deleting fields from a full payload:
 - quantities with telltale scales (barrels, contracts, USD/bbl) are shown only as
   ratios, percentiles or positions within a band;
 - news, macro series, benchmark returns and seasonality are not offered: each can
-  reveal the calendar date.
+  reveal the calendar date;
+- every tool returns the same shape for every asset (nulls and `available: false`
+  instead of errors), so which tools answer does not single out the asset.
 Payloads are produced inside `ToolRegistry.call`, before `compact` and the scratchpad,
 so the claim checker validates exactly what the model saw.
 
-Residual risk: the shape of the price path can still hint at famous episodes; reports
-from these backtests say so.
+Residual risk: the shape of the price path can still hint at famous episodes, and which
+data exist (e.g. a processing margin) reveals the commodity class; reports say so.
 """
 
 from __future__ import annotations
@@ -30,7 +32,19 @@ from fa.forecasting.base import qcol
 from fa.forecasting.evaluate import EvalResult, diebold_mariano, dm_block, mean_pinball
 from fa.tools.registry import NoArgs, RunContext, Tool, ToolError, ToolRegistry
 
-INVENTORY_LABELS = "ABCDEFGH"
+INVENTORY_LABELS = "ABCD"  # fixed number of slots, padded with nulls
+
+
+def _series_kind(name: str) -> str:
+    """Generic but honest kind, so production or utilization is never read as stocks."""
+    n = name.lower()
+    if "stock" in n or "storage" in n or "inventor" in n:
+        return "stocks"
+    if "production" in n or "output" in n:
+        return "supply"
+    if "utilization" in n or "runs" in n or "input" in n:
+        return "processing rate"
+    return "other"
 
 
 @dataclass
@@ -104,43 +118,49 @@ def risk_metrics(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
 
 
 def inventories(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
-    invs = _state(ctx).snapshot.inventories
-    if not invs:
-        raise ToolError("no inventory data for this asset")
-    return {
-        "series": [
+    invs = _state(ctx).snapshot.inventories[: len(INVENTORY_LABELS)]
+    series = []
+    for i, label in enumerate(INVENTORY_LABELS):
+        inv = invs[i] if i < len(invs) else None
+        series.append(
             {
-                "name": f"inventory series {INVENTORY_LABELS[i]}",
-                "vs_5y_average": inv.dev_pct,
-                "position_in_5y_band": inv.band_pos,
+                "name": f"series {label}",
+                "kind": _series_kind(inv.name) if inv else None,
+                "available": inv is not None,
+                "vs_5y_average": inv.dev_pct if inv else None,
+                "position_in_5y_band": inv.band_pos if inv else None,
             }
-            for i, inv in enumerate(invs[: len(INVENTORY_LABELS)])
-        ],
-        "note": "position_in_5y_band: 0 = at the 5-year low, 1 = at the 5-year high",
+        )
+    return {
+        "series": series,
+        "note": (
+            "weekly fundamentals vs their prior 5-year seasonal band; kind: stocks, supply "
+            "or processing rate; position_in_5y_band: 0 = 5-year low, 1 = 5-year high"
+        ),
     }
 
 
 def positioning(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
     cot = _state(ctx).snapshot.cot
-    if cot is None:
-        raise ToolError("no positioning data for this asset")
     return {
-        "speculators_net_share_of_open_interest": cot.mm_net_pct_oi,
-        "speculators_net_percentile_3y": cot.mm_net_pctile_3y,
+        "available": cot is not None,
+        "speculators_net_share_of_open_interest": cot.mm_net_pct_oi if cot else None,
+        "speculators_net_percentile_3y": cot.mm_net_pctile_3y if cot else None,
     }
 
 
 def processing_margin(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
     crack = _state(ctx).snapshot.crack
-    if crack is None:
-        raise ToolError("no processing-margin data for this asset")
-    return {"margin_percentile_1y": crack.pctile_1y}
+    return {
+        "available": crack is not None,
+        "margin_percentile_1y": crack.pctile_1y if crack else None,
+    }
 
 
 def forecast(ctx: RunContext, _: NoArgs) -> dict[str, Any]:
     st = _state(ctx)
     if not st.forecast_rows:
-        raise ToolError("no forecast at this date")
+        raise ToolError("no forecast at this decision")
     return {
         "horizons": [
             {"horizon_days": h, **row, "skill_so_far": st.past_skill.get(h)}
@@ -168,15 +188,15 @@ ANON_TOOLS: dict[str, tuple[str, Any]] = {
         risk_metrics,
     ),
     "inventories": (
-        "Weekly inventory statistics versus their prior 5-year seasonal band (as ratios).",
+        "Weekly fundamental series (stocks, supply, processing rate) versus their prior 5-year seasonal band, as ratios; unavailable series are null.",
         inventories,
     ),
     "positioning": (
-        "Speculators' net position as a share of open interest and its 3-year percentile.",
+        "Speculators' net position as a share of open interest and its 3-year percentile (null if unavailable).",
         positioning,
     ),
     "processing_margin": (
-        "1-year percentile of the downstream processing margin.",
+        "1-year percentile of the downstream processing margin (null if unavailable).",
         processing_margin,
     ),
     "forecast": (
@@ -213,11 +233,16 @@ def forecast_rows_at(ev: EvalResult, model: str, date: pd.Timestamp) -> dict[int
 def past_skill(
     ev: EvalResult, model: str, pos: int, cfg: ForecastingConfig
 ) -> dict[int, dict[str, float | None]]:
-    """Skill vs the naive baseline on origins whose labels were complete by row `pos`."""
+    """Skill vs the naive baseline on origins whose labels were final by row `pos`.
+
+    A label ending at row q+h uses the volume-detected roll mask, which looks up to
+    `embargo_days` sessions past q+h, so it counts only once q + h + embargo <= pos.
+    """
     out: dict[int, dict[str, float | None]] = {}
     base = cfg.skill.baseline
+    lag = cfg.walk_forward.embargo_days
     for h, y in ev.realized.items():
-        settled = (ev.positions[h] + h <= pos) & np.isfinite(y.to_numpy())
+        settled = (ev.positions[h] + h + lag <= pos) & np.isfinite(y.to_numpy())
         if settled.sum() < 20 or model not in ev.predictions or base not in ev.predictions:
             out[h] = None  # type: ignore[assignment]
             continue

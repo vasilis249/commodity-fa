@@ -11,7 +11,12 @@ import pandas as pd
 import pytest
 
 from fa.analytics.snapshot import Snapshot
-from fa.backtest.agent_signal import _forecast_component, decision_positions
+from fa.backtest.agent_signal import (
+    _forecast_component,
+    cutoff_notes,
+    decision_positions,
+    rebase_factor,
+)
 from fa.backtest.anonymize import (
     ANON_AGENT_TOOLS,
     ANON_TOOLS,
@@ -19,8 +24,8 @@ from fa.backtest.anonymize import (
     build_anon_registry,
     past_skill,
 )
-from fa.backtest.engine import CostModel, buy_and_hold, run_backtest
-from fa.backtest.metrics import summarize
+from fa.backtest.engine import CostModel, buy_and_hold, pnl_bars, run_backtest
+from fa.backtest.metrics import edge_pvalue, summarize
 from fa.backtest.service import compare
 from fa.backtest.signals import forecast_targets, sma_crossover, vol_targeted
 from fa.config import AppConfig, SMASettings
@@ -92,6 +97,62 @@ def test_buy_and_hold_enters_at_the_second_open() -> None:
     assert res.equity.iloc[-1] == pytest.approx(140 / 110)
 
 
+def _raw(opens, closes, reasons) -> pd.DataFrame:
+    idx = pd.bdate_range("2024-01-01", periods=len(opens))
+    return pd.DataFrame(
+        {"open": opens, "close": closes, "mask_reason": reasons}, index=idx, dtype=object
+    ).astype({"open": float, "close": float})
+
+
+def test_pnl_bars_credit_only_what_a_held_contract_earned() -> None:
+    raw = _raw(
+        [100, 101, 80, 81, 82],
+        [100, 102, 82, 83, 84],
+        ["missing", "", "roll", "", ""],  # day 2: splice in the overnight gap (102 -> 80)
+    )
+    b = pnl_bars(raw)
+    on = (b["open"] / b["close"].shift(1)).to_numpy()
+    intra = (b["close"] / b["open"]).to_numpy()
+    assert on[1] == pytest.approx(101 / 100) and intra[1] == pytest.approx(102 / 101)
+    assert on[2] == 1.0 and intra[2] == pytest.approx(82 / 80)  # splice not credited
+    assert on[3] == pytest.approx(81 / 82) and intra[3] == pytest.approx(83 / 81)
+    assert b["zeroed"].tolist() == ["", "", "overnight", "", ""]
+
+
+def test_exit_on_a_masked_day_does_not_depend_on_its_close() -> None:
+    def exit_return(close_on_roll_day: float) -> float:
+        raw = _raw(
+            [100, 101, 80, 81], [100, 102, close_on_roll_day, 83], ["missing", "", "roll", ""]
+        )
+        t = pd.Series([1.0, 0.0, np.nan, np.nan], index=raw.index)  # exit at the roll-day open
+        return run_backtest(pnl_bars(raw), t, NO_COST, "t").frame["ret"].iloc[2]
+
+    assert exit_return(82) == exit_return(95) == 0.0
+
+
+def test_nonpositive_prices_earn_nothing() -> None:
+    raw = _raw(
+        [20, 18, -5, -30, 10, 11],
+        [20, 17, -37.6, 10, 11, 12],
+        ["missing", "", "nonpositive_price", "nonpositive_price", "", ""],
+    )
+    b = pnl_bars(raw)
+    res = run_backtest(b, pd.Series([1.0] + [np.nan] * 5, index=raw.index), NO_COST, "t")
+    assert res.frame["ret"].iloc[2] == res.frame["ret"].iloc[3] == 0.0
+    assert b["zeroed"].tolist()[2:4] == ["both", "both"]
+    assert np.isfinite(res.equity).all() and (res.equity > 0).all()
+
+
+def test_benchmark_pays_roll_costs_like_an_always_long_strategy() -> None:
+    bars = _bars([100] * 4, [100] * 4)
+    rolls = pd.Series([False, False, True, False], index=IDX)
+    costs = CostModel(0.001, 0.0, 0.002)
+    bench = buy_and_hold(bars, costs, rolls)
+    strat = run_backtest(bars, pd.Series([1.0] + [np.nan] * 3, index=IDX), costs, "s", rolls)
+    assert bench.frame["cost"].sum() == pytest.approx(strat.frame["cost"].sum())
+    assert bench.frame["cost"].iloc[2] == pytest.approx(0.002)
+
+
 # --- metrics --------------------------------------------------------------------------
 
 
@@ -104,6 +165,47 @@ def test_metrics_on_a_known_path() -> None:
     assert m.trades == 1 and m.exposure == pytest.approx(1.0)
     assert m.hit_rate == pytest.approx(1 / 3)
     assert m.sharpe_ci95 is not None and m.sharpe_ci95[0] < m.sharpe < m.sharpe_ci95[1]
+
+
+def test_sharpe_ci_uses_the_per_period_sharpe() -> None:
+    rng = np.random.default_rng(3)
+    idx = pd.bdate_range("2020-01-01", periods=501)
+    c = 100 * np.exp(np.cumsum(rng.normal(0.0005, 0.01, len(idx))))
+    bars = pd.DataFrame({"open": np.r_[100, c[:-1]], "close": c}, index=idx)
+    m = summarize(buy_and_hold(bars, NO_COST))
+    n = m.days
+    sr_d = m.sharpe / np.sqrt(252)
+    se = np.sqrt((1 + 0.5 * sr_d**2) / n) * np.sqrt(252)
+    assert m.sharpe_ci95 == pytest.approx((m.sharpe - 1.96 * se, m.sharpe + 1.96 * se))
+
+
+def _random_walk_bars(rng: np.random.Generator, n: int) -> pd.DataFrame:
+    idx = pd.bdate_range("2018-01-01", periods=n)
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.015, n)))
+    o = np.r_[100, c[:-1]] * np.exp(rng.normal(0, 0.003, n))
+    return pd.DataFrame({"open": o, "close": c}, index=idx)
+
+
+def test_edge_pvalue_detects_foresight() -> None:
+    bars = _random_walk_bars(np.random.default_rng(7), 1500)
+    bench = buy_and_hold(bars, NO_COST)
+    up_next = (bars["close"] / bars["open"] > 1).astype(float).shift(-1)  # peeks: test only
+    assert edge_pvalue(run_backtest(bars, up_next, NO_COST, "oracle"), bench, 20) < 0.001
+    assert np.isnan(edge_pvalue(bench, bench, 20))
+
+
+def test_edge_pvalue_size_on_coin_flips() -> None:
+    """Random signals should look significant about alpha of the time, not more."""
+    rng = np.random.default_rng(11)
+    pvals = []
+    for _ in range(100):
+        bars = _random_walk_bars(rng, 750)
+        coin = pd.Series(rng.integers(0, 2, len(bars)).astype(float), index=bars.index)
+        coin = coin.where(np.arange(len(bars)) % 5 == 0)  # a decision every 5 sessions
+        pvals.append(
+            edge_pvalue(run_backtest(bars, coin, NO_COST, "c"), buy_and_hold(bars, NO_COST), 20)
+        )
+    assert np.mean(np.asarray(pvals) < 0.05) <= 0.10
 
 
 def test_flat_strategy_has_no_sharpe_and_no_trades() -> None:
@@ -188,6 +290,26 @@ def test_decision_positions_spacing_and_cap() -> None:
     assert decision_positions([0, 5, 30, 31, 55], 20, 10) == [0, 30, 55]
 
 
+def test_rebase_factor_fails_closed_and_never_looks_ahead() -> None:
+    close = pd.Series([50.0, -3.0, np.nan, 80.0])
+    assert rebase_factor(close, 0) == pytest.approx(2.0)
+    assert rebase_factor(close, 2) == pytest.approx(2.0)  # last positive at or before, not 80
+    with pytest.raises(ValueError):
+        rebase_factor(pd.Series([np.nan, -1.0, 5.0]), 1)
+
+
+def test_cutoff_notes(cfg: AppConfig) -> None:
+    dates = [pd.Timestamp("2025-06-02"), pd.Timestamp("2026-06-01")]
+    notes, models = cutoff_notes(cfg, dates)
+    assert models and all(m.startswith("claude-") for m in models.values())
+    assert all("training cutoff" in n for n in notes)
+    roles = cfg.models.roles.copy()
+    roles["analyst"] = roles["analyst"].model_copy(update={"training_cutoff": date(2026, 1, 1)})
+    cfg2 = cfg.model_copy(update={"models": cfg.models.model_copy(update={"roles": roles})})
+    notes2, _ = cutoff_notes(cfg2, dates)
+    assert any("1 of 2 decisions" in n for n in notes2)
+
+
 def test_forecast_component_needs_a_significant_settled_edge() -> None:
     row = {"p_up": 0.7}
     assert _forecast_component(None, row, 0.05)[1] is False
@@ -210,8 +332,9 @@ def test_past_skill_uses_only_settled_origins(cfg: AppConfig) -> None:
     h = fs.horizon
     pos = int(ev.positions[h][-1])
     before = past_skill(ev, "drift", pos, small.forecasting)[h]
-    # poison every label that was not settled by `pos`: the skill must not move
-    unsettled = ev.positions[h] + h > pos
+    # poison every label not final by `pos` (its roll mask looks up to embargo_days ahead):
+    # the skill must not move
+    unsettled = ev.positions[h] + h + small.forecasting.walk_forward.embargo_days > pos
     y = ev.realized[h].copy()
     y.iloc[np.flatnonzero(unsettled)] = 1e6
     poisoned = type(ev)(**{**ev.__dict__, "realized": {**ev.realized, h: y}})
@@ -274,7 +397,9 @@ _WORDS = [
     "opec",
 ]
 LEAKY = re.compile(
-    r"(19|20)\d\d-\d\d|\b(19|20)\d\d\b|\$|cl=f|(?<![a-z])(" + "|".join(_WORDS) + r")(?![a-z])",
+    r"(19|20)\d\d-\d\d|(?<![\d.])(19|20)\d\d(?![\d.])|\$|cl=f|(?<![a-z])("
+    + "|".join(_WORDS)
+    + r")(?![a-z])",
     re.IGNORECASE,
 )
 
@@ -357,10 +482,49 @@ def test_prices_are_rebased(cfg: AppConfig, cl_snapshot, tmp_path) -> None:
 
 def test_inventories_are_ratios_only(cfg: AppConfig, cl_snapshot, tmp_path) -> None:
     out = _call(_anon_ctx(cfg, cl_snapshot, tmp_path), "inventories")
+    kinds = [s["kind"] for s in out["series"] if s["available"]]
+    assert kinds and set(kinds) <= {"stocks", "supply", "processing rate", "other"}
     for s in out["series"]:
-        assert set(s) == {"name", "vs_5y_average", "position_in_5y_band"}
+        assert set(s) == {"name", "kind", "available", "vs_5y_average", "position_in_5y_band"}
+    # production and utilization are never presented as inventories
+    assert "stocks" in kinds and ("supply" in kinds or "processing rate" in kinds)
+
+
+def test_payload_shape_does_not_depend_on_the_asset(cfg: AppConfig, cl_snapshot, tmp_path) -> None:
+    bare = cl_snapshot.model_copy(update={"inventories": [], "cot": None, "crack": None})
+
+    def shape(v):
+        if isinstance(v, dict):
+            return {k: shape(x) for k, x in v.items() if k != "result_id"}
+        if isinstance(v, list):
+            return [shape(x) for x in v]
+        return None
+
+    full_ctx, bare_ctx = _anon_ctx(cfg, cl_snapshot, tmp_path), _anon_ctx(cfg, bare, tmp_path)
+    for name in ANON_TOOLS:
+        a = build_anon_registry().call(full_ctx, "x", name, {})
+        b = build_anon_registry().call(bare_ctx, "x", name, {})
+        assert a.is_error == b.is_error and shape(a.payload) == shape(b.payload), name
 
 
 def test_anon_agents_only_get_anon_tools() -> None:
     assert {t for ts in ANON_AGENT_TOOLS.values() for t in ts} <= set(ANON_TOOLS)
     assert "news" not in ANON_TOOLS and "macro" not in ANON_TOOLS
+
+
+def test_accounting_notes_flag_negative_prices_while_invested() -> None:
+    from fa.backtest.service import accounting_notes
+
+    raw = _raw(
+        [20, 18, -5, -30, 10, 11],
+        [20, 17, -37.6, 10, 11, 12],
+        ["missing", "", "nonpositive_price", "nonpositive_price", "roll", ""],
+    )
+    bars = pnl_bars(raw)
+    bench = buy_and_hold(bars, NO_COST)
+    flat = run_backtest(bars, pd.Series(0.0, index=raw.index), NO_COST, "flat")
+    notes = accounting_notes(bars, flat, bench)
+    warning = next(n for n in notes if n.startswith("WARNING"))
+    assert "2024-01-03, 2024-01-04" in warning
+    assert "strategy flat, buy-and-hold invested" in warning
+    assert any("1 roll sessions" in n for n in notes)

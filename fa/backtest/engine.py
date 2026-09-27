@@ -7,9 +7,11 @@ Timing (no look-ahead by construction):
                  + new weight x intraday move (open t+1 -> close t+1).
 
 Positions are fractions of equity (+1 = fully long), held at constant weight between
-decisions (drift trades are ignored). Futures trade the roll-adjusted series, so contract
-splices produce no P&L; an optional per-roll cost is charged on roll sessions.
-Paper only: nothing here can place an order.
+decisions (drift trades are ignored). `pnl_bars` turns raw futures bars into bars whose legs
+are only what a held position really earned: a contract splice (in the overnight gap of a
+roll-masked session) earns nothing, and non-positive or missing prices earn nothing.
+An optional per-roll cost is charged on roll sessions. Paper only: nothing here can place
+an order.
 """
 
 from __future__ import annotations
@@ -48,6 +50,40 @@ class BacktestResult:
     @property
     def equity(self) -> pd.Series:
         return self.frame["equity"]
+
+
+def pnl_bars(frame: pd.DataFrame) -> pd.DataFrame:
+    """Synthetic open/close whose overnight and intraday ratios are the returns a held
+    front-month position earned, plus `zeroed` ("overnight" | "both" | "") per session.
+
+    - valid sessions: raw overnight (open / previous close) and intraday (close / open)
+      ratios, identical to the roll-adjusted ones;
+    - roll-masked sessions: the overnight gap may hold the vendor's contract splice, so it
+      earns zero; the intraday leg (one contract, open to close) is credited. Which
+      sessions are masked is used for accounting only, never by a signal;
+    - non-positive or missing prices: both legs earn zero (no return is defined).
+    Measured on the cached universe, roll-session overnight gaps have a p99 up to 8x the
+    normal one, while roll-session intraday moves look like any other session's.
+    """
+    o = frame["open"].astype(float)
+    c = frame["close"].astype(float)
+    reason = frame["mask_reason"].fillna("missing")
+    pc = c.shift(1)
+    ok_c, ok_o, ok_pc = c > 0, o > 0, pc > 0  # NaN compares False
+    valid, roll = reason == "", reason == "roll"
+    on = np.where(valid & ok_o & ok_pc, o / pc, 1.0)
+    intra = np.where(
+        (valid | roll) & ok_c & ok_o, c / o, np.where(valid & ok_c & ok_pc & ~ok_o, c / pc, 1.0)
+    )
+    on[0] = intra[0] = 1.0
+    level = np.cumprod(on * intra)
+    prev = np.concatenate([[1.0], level[:-1]])
+    zeroed = np.where(roll, "overnight", np.where(valid, "", "both"))
+    zeroed[0] = ""
+    return pd.DataFrame(
+        {"open": prev * on, "close": level, "zeroed": zeroed, "mask_reason": reason},
+        index=frame.index,
+    )
 
 
 def run_backtest(
@@ -102,8 +138,10 @@ def run_backtest(
     return BacktestResult(frame, name)
 
 
-def buy_and_hold(bars: pd.DataFrame, costs: CostModel) -> BacktestResult:
-    """Benchmark: decide +1 at the first close, enter at the next open, hold."""
+def buy_and_hold(
+    bars: pd.DataFrame, costs: CostModel, roll_days: pd.Series | None = None
+) -> BacktestResult:
+    """Benchmark: decide +1 at the first close, enter at the next open, hold (and roll)."""
     targets = pd.Series(np.nan, index=bars.index)
     targets.iloc[0] = 1.0
-    return run_backtest(bars, targets, costs, "buy_and_hold")
+    return run_backtest(bars, targets, costs, "buy_and_hold", roll_days)

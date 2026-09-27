@@ -4,7 +4,9 @@
 default_role: analyst
 
 roles:
-  # max_tokens includes adaptive thinking; effort is the main cost lever
+  # max_tokens includes adaptive thinking; effort is the main cost lever.
+  # Optional training_cutoff: YYYY-MM-DD (from the model card). Agent backtests use it to
+  # flag decisions the model may remember; left unset, every decision is treated as at risk.
   analyst: {model: claude-sonnet-5, effort: low, max_tokens: 6000}
   researcher: {model: claude-sonnet-5, effort: low, max_tokens: 5000}
   risk_reviewer: {model: claude-sonnet-5, effort: low, max_tokens: 5000}

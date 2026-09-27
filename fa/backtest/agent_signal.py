@@ -81,6 +81,41 @@ def _sessions_to_roll(svc: DataService, symbol: str, ds: Dataset, pos: int) -> i
     return int(pd.bdate_range(d, nxt[0].date()).size - 1) if nxt else None
 
 
+def rebase_factor(close: pd.Series, pos: int) -> float:
+    """100 / the last positive close at or before the first decision (known then).
+    Fails closed: absolute price levels must never reach the prompt."""
+    known = close.iloc[: pos + 1]
+    positive = known[known > 0]
+    if positive.empty:
+        raise ValueError("no positive close at or before the first decision; cannot rebase")
+    return 100.0 / float(positive.iloc[-1])
+
+
+def cutoff_notes(cfg: AppConfig, decision_dates: list[pd.Timestamp]) -> tuple[list[str], dict]:
+    """Which models made the decisions, and how many decisions they may remember."""
+    agents = [*ANON_ANALYSTS, "bull_researcher", "bear_researcher"]
+    roles = {cfg.models.agent_roles.get(a, cfg.models.default_role) for a in agents}
+    specs = {r: cfg.models.roles[r] for r in sorted(roles)}
+    models = {r: sp.model for r, sp in specs.items()}
+    notes = []
+    for model in sorted(set(models.values())):
+        cutoffs = [sp.training_cutoff for sp in specs.values() if sp.model == model]
+        cut = next((c for c in cutoffs if c is not None), None)
+        if cut is None:
+            notes.append(
+                f"LLM memory: the training cutoff of {model} is not configured "
+                "(models.yaml roles.*.training_cutoff); treat every decision as possibly "
+                "inside its training data, where anonymization is the only defence."
+            )
+        else:
+            before = sum(d.date() <= cut for d in decision_dates)
+            notes.append(
+                f"LLM memory: {before} of {len(decision_dates)} decisions fall on or before "
+                f"the training cutoff of {model} ({cut}); only anonymization protects those."
+            )
+    return notes, models
+
+
 def _forecast_component(
     skill: dict[str, float | None] | None, row: dict[str, float], alpha: float
 ) -> tuple[float, bool, str]:
@@ -117,8 +152,7 @@ def agent_targets(
         cfg.models.pricing, cfg.models.budget.model_copy(update={"max_usd_per_run": budget})
     )
     runs_dir = runs_dir or cfg.config_dir.parent / ".runs"
-    first_close = float(ds.close.iloc[positions[0]]) if positions else 1.0
-    factor = 100.0 / first_close if first_close > 0 else 1.0
+    factor = rebase_factor(ds.close, positions[0]) if positions else 1.0
     targets = pd.Series(float("nan"), index=ds.dates)
     notes: list[str] = []
     decided = 0
@@ -179,15 +213,19 @@ def agent_targets(
         decided += 1
     if positions:
         targets.iloc[: positions[0]] = float("nan")
+    memory_notes, models = cutoff_notes(cfg, [ds.dates[p] for p in positions[:decided]])
     notes += [
         f"{decided} anonymized agent decisions every {a.rebalance_every} sessions; "
         f"LLM cost ${shared.spent_usd:.3f} (cap ${budget:.2f}).",
         "Agents saw rebased prices, ratios and percentiles only (no names, dates, units or "
-        "sources). Residual risk: the price path's shape can still hint at famous episodes.",
+        "sources). Residual risk: the price path's shape can still hint at famous episodes, "
+        "and which data exist (e.g. a processing margin) reveals the commodity class.",
+        *memory_notes,
     ]
     params = {
         "agent": a.model_dump(),
         "decisions": decided,
         "llm_cost_usd": round(shared.spent_usd, 4),
+        "models": models,
     }
     return targets, notes, params

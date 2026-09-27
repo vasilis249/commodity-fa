@@ -317,6 +317,7 @@ class RoleSpec(_Strict):
     model: str
     effort: Literal["low", "medium", "high", "xhigh", "max"]
     max_tokens: int = Field(gt=0)
+    training_cutoff: date | None = None  # from the model card; used by agent backtests
 
 
 class Budget(_Strict):
@@ -406,6 +407,7 @@ class BacktestConfig(_Strict):
     long_short: bool
     vol_target: bool
     results_dir: Path
+    significance_block: int = Field(ge=2)  # sessions per batch-means block (vs buy-and-hold)
     sma: SMASettings
     forecast: ForecastSignalSettings
     agent: AgentBacktestSettings

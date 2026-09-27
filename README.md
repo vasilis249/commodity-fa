@@ -5,7 +5,7 @@ A local research tool for **energy-commodity analysis and probabilistic price fo
 > Research and learning only. Paper trading only: no broker connections and no order execution. **Not investment advice.**
 
 ## Status
-Phases 0–4 are done: scaffold, data layer, analytics, forecasting and agents. See `CLAUDE.md` for the roadmap and conventions.
+Phases 0–5 are done: scaffold, data layer, analytics, forecasting, agents and the paper backtester. See `CLAUDE.md` for the roadmap and conventions.
 
 ## Quick start
 ```bash
@@ -24,6 +24,7 @@ uv run fa data news CL=F              # recent headlines
 uv run fa analyze CL=F --no-llm       # numeric snapshot (technicals, risk, inventories, COT, curve)
 uv run fa forecast CL=F               # 1/5/20-day P10/P50/P90 + P(up), with measured skill vs a random walk
 uv run fa report CL=F                 # full agent report (needs ANTHROPIC_API_KEY): reports/CL_F_<date>.md/.html/.json
+uv run fa backtest CL=F -s sma        # paper backtest vs buy-and-hold, with costs (also: -s forecast, -s agent)
 uv run pytest -m network              # live acceptance test (needs internet)
 ```
 
@@ -44,3 +45,9 @@ The report pipeline runs five analysts in parallel: supply/demand, technical, ne
 - **Every number in the text is checked in code.** Each one must match a value in the tool result the sentence cites (`[T3]`). Unverifiable sentences go back to the agent to fix; any that still fail are removed and listed in the report.
 - **The rating is computed in code** from the analysts' stances and the forecast's measured edge, using the weights in `config/agents.yaml`. The synthesizer explains the rating; it cannot change it.
 - **Cost:** the default hard budget is $1.00 per run. The run aborts cleanly if it's exceeded. The cost is printed, and each run's full trail (every tool call, result and LLM call) is written to `.runs/<timestamp>_<id>.jsonl`.
+
+## Paper backtests (`fa backtest`)
+Paper only; nothing here can place an order. Targets are decided at the close and executed at the **next open**, with commission, slippage and roll costs (`config/risk.yaml`). Every strategy is reported next to **buy-and-hold over the same window**, with a Sharpe confidence interval.
+- `-s sma`: 50/200-day moving-average crossover (long-only by default; `config/backtest.yaml`).
+- `-s forecast`: goes long when the walk-forward P(up) at 5 days is at least 0.55. Thresholds are fixed in config, not tuned on the backtest.
+- `-s agent`: the analysts decide every 20 sessions on **anonymized** data: prices rebased to 100, no names, dates, units, news or macro. This fights the LLM's memory of what happened next. It asks for `--yes` when the estimated cost exceeds `max_usd_backtest` ($5 by default), which is also a hard cap.

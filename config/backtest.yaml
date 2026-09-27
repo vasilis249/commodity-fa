@@ -3,6 +3,7 @@
 long_short: false               # false: negative signals go flat instead of short
 vol_target: false               # true: scale positions to risk.vol_target_annual (20d vol)
 results_dir: backtests          # relative to the repo root; git-ignored
+significance_block: 20          # sessions per block for the batch-means test vs buy-and-hold
 
 sma:
   fast: 50

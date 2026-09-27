@@ -4,7 +4,6 @@ anonymized agent backtest on a scripted LLM (cost warning, shared cap, long-only
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -17,7 +16,7 @@ from fa.forecasting.dataset import build_dataset
 from fa.reports.backtest_text import render
 from tests.agent_helpers import FakeLLM, offline_service
 from tests.forecast_helpers import small_config
-from tests.unit.test_backtest import _WORDS
+from tests.unit.test_backtest import _leaks
 
 
 @pytest.fixture
@@ -47,6 +46,8 @@ def test_sma_backtest_vs_buy_and_hold(setup) -> None:
     s, b = rep.strategy_metrics, rep.benchmark_metrics
     assert s.start == b.start and s.end == b.end and s.days == b.days
     assert rep.excess["cagr"] == pytest.approx(s.cagr - b.cagr)
+    assert rep.edge_p_value is None or 0 <= rep.edge_p_value <= 1
+    assert "No measurable edge" in rep.notes[0] or "above buy-and-hold" in rep.notes[0]
     assert s.costs_paid > 0 and b.trades == 1
     saved = json.loads(Path(rep.results_file).read_text())
     assert saved["strategy"] == "sma" and "Paper backtest" in saved["disclaimer"]
@@ -64,7 +65,7 @@ def test_forecast_backtest_runs(setup) -> None:
 
 
 def test_agent_backtest_on_anonymized_data(setup) -> None:
-    _cfg, svc, ds, tmp = setup
+    cfg, svc, ds, tmp = setup
     llm = FakeLLM(stance="bearish")
     targets, notes, params = agent_targets(svc, "CL=F", ds, llm=llm, runs_dir=tmp / "runs")
     decided = targets.dropna()
@@ -73,16 +74,13 @@ def test_agent_backtest_on_anonymized_data(setup) -> None:
     agents = {a for a, _ in llm.calls}
     assert set(ANON_ANALYSTS) <= agents and "validator" not in agents
     assert "news_sentiment_analyst" not in agents and "macro_analyst" not in agents
-    # nothing identifying reached the model: no names, dates or tickers in any request
-    leaky = re.compile(
-        r"\b(19|20)\d\d-\d\d-\d\d\b|CL=F|(?<![a-z])(" + "|".join(_WORDS) + r")(?![a-z])", re.I
-    )
-    for _, params_ in llm.calls:
-        text = json.dumps(
-            {"system": params_.get("system"), "messages": params_["messages"]}, default=str
-        )
-        hit = leaky.search(text)
-        assert not hit, f"request leaks {hit.group(0)!r}"
+    # nothing identifying reached the model: scan every request in full (system prompt,
+    # messages, tool descriptions and schemas, output format)
+    for _, request in llm.calls:
+        found = _leaks(json.loads(json.dumps(request, default=str)))
+        assert not found, f"request leaks {found}"
+    assert set(params["models"].values()) <= set(cfg.models.pricing)
+    assert any("training cutoff" in n for n in notes)
     assert params["llm_cost_usd"] > 0 and any("anonymized" in n for n in notes)
 
 

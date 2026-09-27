@@ -54,6 +54,8 @@ def render(r: BacktestReport) -> str:
     ci = s.sharpe_ci95
     if ci:
         lines.append(f"  Sharpe 95% CI   [{ci[0]:+.2f}, {ci[1]:+.2f}] (strategy)")
+    pv = "n/a" if r.edge_p_value is None else f"{r.edge_p_value:.3f}"
+    lines.append(f"  p (beats B&H)   {pv} (one-sided)")
     lines += ["", "NOTES"] + [f"  - {n}" for n in r.notes]
     if r.results_file:
         lines.append(f"  - saved: {r.results_file} (+ equity curves .csv)")

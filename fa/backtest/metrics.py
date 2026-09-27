@@ -9,6 +9,7 @@ import numpy as np
 from fa.analytics import risk
 from fa.analytics.models import FiniteModel
 from fa.backtest.engine import BacktestResult
+from fa.forecasting.evaluate import diebold_mariano
 
 TRADING_DAYS = 252
 
@@ -39,8 +40,9 @@ def summarize(result: BacktestResult) -> Metrics:
     n = len(r)
     years = n / TRADING_DAYS if n else float("nan")
     sharpe = risk.sharpe(r)
+    sr_d = sharpe / math.sqrt(TRADING_DAYS)  # Lo's formula takes the per-period Sharpe
     se = (
-        math.sqrt((1 + 0.5 * sharpe**2) / n) * math.sqrt(TRADING_DAYS)
+        math.sqrt((1 + 0.5 * sr_d**2) / n) * math.sqrt(TRADING_DAYS)
         if n > 1 and math.isfinite(sharpe)
         else float("nan")
     )
@@ -64,6 +66,16 @@ def summarize(result: BacktestResult) -> Metrics:
         trades=int((f["trade"].abs() > 1e-12).sum()),
         costs_paid=float(f["cost"].sum()),
     )
+
+
+def edge_pvalue(strategy: BacktestResult, benchmark: BacktestResult, block: int) -> float:
+    """One-sided p-value that the strategy's mean daily return beats the benchmark's
+    (batch-means test over `block`-session blocks; returns are autocorrelated through
+    held positions). NaN when there are too few blocks."""
+    d = (benchmark.returns - strategy.returns).iloc[1:].to_numpy(dtype=float)
+    if not np.any(np.abs(d) > 1e-15):
+        return float("nan")
+    return diebold_mariano(d, block)
 
 
 def excess(strategy: Metrics, benchmark: Metrics) -> dict[str, float | None]:

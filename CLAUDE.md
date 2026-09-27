@@ -17,6 +17,7 @@ uv run fa data prices CL=F [--years 10] [--offline] [--refresh] [-v]   # prices 
 uv run fa data eia CL=F | cot CL=F | fred DGS10 | news CL=F
 uv run fa forecast CL=F [--models naive,lightgbm] [--folds N] [--refresh] [--json]
 uv run fa report CL=F [--as-of D] [--rounds N] [--budget USD]   # agents; needs ANTHROPIC_API_KEY
+uv run fa backtest CL=F [-s sma|forecast|agent] [--offline] [--yes] [--json]   # paper backtest vs buy-and-hold
 uv run fa data cache                                                     # list cache entries
 uv run fa data sql "SELECT count(*) FROM yahoo"                         # DuckDB over .cache/
 ```
@@ -118,6 +119,14 @@ Analytics, forecasting and backtesting must run **without any LLM**, so they sta
 - **Prompts** are in `prompts/*.md` with a `version:` header, plus `_common.md`. The version is logged per call. Bump it whenever the text changes.
 - **Reports** go to `reports/<SYM>_<date>.{json,md,html}`. A past `as_of` (more than 3 days back) sets `lookahead_warning`: the agents may know what happened next.
 
+## Backtester (Phase 5)
+- **Timing** (`fa/backtest/engine.py`): a signal decides a target weight at the close of day t; the engine trades at the open of t+1. Day t+1's P&L is the old weight on the overnight move plus the new weight on the intraday move. Costs (commission + slippage per side) apply to every trade, and the roll cost applies to held notional on the first session after each expiry (`config/risk.yaml: backtest`). Weights are clipped to [-1, 1].
+- **P&L bars** (`pnl_bars`): valid sessions use the raw overnight and intraday ratios. On roll-masked sessions the overnight gap (where the vendor's contract splice sits) earns zero, and the intraday leg is credited. Non-positive or missing prices earn zero, and the report warns about them (e.g. CL on 2020-04-20/21). The mask is used for accounting only; **signals never read it**, nor `close_adj`.
+- **Signals** (`fa/backtest/signals.py`) read only the causal `Dataset` series (`level`, `r`). SMA crossover and vol targeting are checked with `assert_causal`, and a deliberately peeking signal is tested to be caught. The forecast signal uses walk-forward predictions (every fold) at origins only; its thresholds are fixed in `config/backtest.yaml`, **never tuned on backtest results**.
+- **Benchmark:** buy-and-hold over exactly the same window (from the first valid target), with the same costs. `fa/backtest/metrics.py` computes CAGR, vol, Sharpe with a 95% CI (Lo 2002), Sortino, max drawdown, Calmar, hit rate, turnover, exposure, trades and costs paid. A signal invested under 5% of the time gets a note saying so. `edge_pvalue` is a one-sided batch-means test on daily return differences vs buy-and-hold (`significance_block` sessions per block; measured size 2.8% at a nominal 5% on coin flips). The first note says "No measurable edge vs buy-and-hold" unless p < alpha.
+- **Agent backtests** (`fa/backtest/agent_signal.py`, `anonymize.py`, `prompts/anon/`): every `rebalance_every` sessions (the last `max_decisions`), the analysts run on **anonymized** tools built from an allow-list: prices rebased to 100 at the first decision, inventories only as ratios and band positions, COT as a share and percentile, and no news, macro, dates, names, units or sources. The forecast only counts when its skill on forecasts **settled before t** (label end + embargo ≤ t) is significant. Every anonymized tool returns the same shape for every asset (nulls with `available: false`, never errors). Inventory slots are labelled by kind (stocks, supply, processing rate). Rebasing uses the last positive close at or before the first decision and fails closed. Notes and params record the model ids, and how many decisions fall before each model's `training_cutoff` (`models.yaml`; unset means all of them are at risk). The rating is computed by `decide()` and mapped to a weight (long-only clips at 0). Cost: `decisions × est_usd_per_decision` must fit `models.budget.max_usd_backtest` unless `--yes`, and a shared `CostTracker` hard-caps the whole run. Residual risk: the price path's shape can still reveal the episode.
+- Results are written to `backtests/<SYM>_<strategy>_<end>.{json,csv}` (git-ignored).
+
 ## Conventions
 - Python 3.12, `uv`, `ruff` (line length 100), lenient `mypy`, `pytest`.
 - Small, readable modules. Add a dependency only when its phase needs it, and say why.
@@ -138,6 +147,6 @@ Build one phase at a time. At the end of each phase: run the tests, show a demo 
 | 2 ✅ | Indicators, supply/demand, curve, seasonality, risk metrics | Reference-value tests; `fa analyze CL=F --no-llm` prints a snapshot |
 | 3 ✅ | Model ladder, walk-forward, leaderboard | `fa forecast CL=F`/`SPY` shows quantiles and the leaderboard; leakage test passes; honest "no edge" message |
 | 4 ✅ | Tool registry, agents, debate, validator, scratchpad, cost tracking | `fa report CL=F` is schema-valid; every number traces to a tool call; cost printed |
-| 5 | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
+| 5 ✅ | Paper backtester, signals, anonymized LLM mode | SMA crossover and forecast signal vs buy-and-hold, with costs |
 | 6 | Streamlit dashboard | `uv run streamlit run app/main.py` works on a fresh clone |
 | 7 | Eval set (~30 verifiable questions), schema regression, README | Eval score reported; setup takes under 10 minutes |
