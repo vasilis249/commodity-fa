@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from fa.config import ReleaseSchedule
+from fa.config import ReleaseOverride, ReleaseSchedule
 from fa.data.calendars import add_business_days, holidays_between
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
@@ -35,6 +35,29 @@ def release_timestamp(period_end: date, schedule: ReleaseSchedule) -> pd.Timesta
     d = release_date(period_end, schedule)
     local = datetime.combine(d, schedule.release_time, tzinfo=ZoneInfo(schedule.tz))
     return pd.Timestamp(local).tz_convert("UTC")
+
+
+def apply_overrides(
+    frame: pd.DataFrame, release: str, schedule: ReleaseSchedule, overrides: list[ReleaseOverride]
+) -> pd.DataFrame:
+    """Push `available_at` later for periods covered by a release override."""
+    out = frame.copy()
+    for ov in overrides:
+        if ov.release != release:
+            continue
+        hit = (out.index >= pd.Timestamp(ov.period_start)) & (
+            out.index <= pd.Timestamp(ov.period_end)
+        )
+        if hit.any():
+            late = pd.Timestamp(
+                datetime.combine(
+                    ov.available_from, schedule.release_time, tzinfo=ZoneInfo(schedule.tz)
+                )
+            ).tz_convert("UTC")
+            out.loc[hit, "available_at"] = out.loc[hit, "available_at"].where(
+                out.loc[hit, "available_at"] >= late, late
+            )
+    return out
 
 
 def next_day_availability(first_published: pd.Series, lag_days: int, tz: str) -> pd.Series:

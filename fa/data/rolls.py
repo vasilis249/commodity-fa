@@ -197,6 +197,27 @@ def _anchor_to_last(close: pd.Series, ret: pd.Series) -> pd.Series:
     return level.rename("close_adj")
 
 
+def calendar_roll_windows(
+    index: pd.DatetimeIndex, rule: RollRule, calendar: str, settings: RollSettings
+) -> pd.Series:
+    """True on sessions inside any [expiry - window_before, expiry + window_after] window.
+
+    Depends only on the exchange calendar, so it is known in advance: a causal mask for
+    forecasting *features* (the volume-detected mask picks the splice day with up to
+    `window_before` sessions of hindsight, see the module docstring).
+    """
+    out = pd.Series(False, index=index)
+    if rule is RollRule.NONE or len(index) == 0:
+        return out
+    horizon = add_business_days(index[-1].date(), settings.window_before, calendar)
+    for exp_ts in expiries(rule, index[0].date(), horizon, calendar).index:
+        expiry = exp_ts.date()
+        lo = pd.Timestamp(add_business_days(expiry, -settings.window_before, calendar))
+        hi = pd.Timestamp(add_business_days(expiry, settings.window_after, calendar))
+        out[(index >= lo) & (index <= hi)] = True
+    return out
+
+
 def roll_adjust(
     prices: pd.DataFrame, rule: RollRule, calendar: str, settings: RollSettings
 ) -> tuple[pd.DataFrame, list[RollEvent]]:

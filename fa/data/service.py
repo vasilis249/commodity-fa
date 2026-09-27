@@ -24,7 +24,7 @@ from fa.config import AppConfig, Instrument, RollRule, Secrets, load_secrets
 from fa.data.cache import CacheMeta, DiskCache
 from fa.data.calendars import calendar_for_exchange
 from fa.data.http import DataUnavailable
-from fa.data.pit import next_day_availability, release_timestamp
+from fa.data.pit import apply_overrides, next_day_availability, release_timestamp
 from fa.data.providers.base import RangeProvider, finalize
 from fa.data.providers.cftc import CFTCProvider
 from fa.data.providers.eia import EIAProvider
@@ -227,55 +227,63 @@ class DataService:
         return PriceData(inst, adjusted, events, report, info)
 
     def curve(
-        self, symbol: str, contracts: int | None = None, refresh: bool = False
+        self,
+        symbol: str,
+        contracts: int | None = None,
+        refresh: bool = False,
+        as_of: date | None = None,
     ) -> tuple[pd.DataFrame, list[FetchInfo]]:
-        """Latest settlement of the next `contracts` listed contract months.
+        """Settlements of the next `contracts` contract months as of `as_of` (default today).
 
-        Columns: contract, delivery, expiry, settle, settle_date. Only the live curve is
-        available (Yahoo drops expired contracts), so there is no historical as-of.
+        Columns: contract, delivery, expiry, settle, settle_date. Each settle is the last
+        one on or before `as_of`. Contracts must be contiguous from the front month: if
+        one is missing (e.g. expired since `as_of`, which Yahoo drops), the curve stops
+        there rather than silently skipping a month.
         """
         inst = self.instrument(symbol)
         if not (inst.contract_root and inst.contract_suffix) or inst.roll_rule is RollRule.NONE:
             raise DataUnavailable(f"{symbol}: no single-contract symbols configured")
         n = contracts or self.cfg.data.curve_contracts
         today = self.now().date()
+        ref = min(as_of, today) if as_of else today
         calendar = calendar_for_exchange(inst.exchange)
         rows: list[dict[str, object]] = []
         infos: list[FetchInfo] = []
-        y, m = today.year, today.month
-        while len(rows) < n and (y - today.year) * 12 + (m - today.month) < n + 24:
+        y, m = ref.year, ref.month
+        while len(rows) < n and (y - ref.year) * 12 + (m - ref.month) < n + 24:
             exp = expiry_date(inst.roll_rule, y, m, calendar)
-            if exp >= today:
+            if exp >= ref:
                 code = contract_code(inst.contract_root, y, m) + inst.contract_suffix
                 try:
                     frame, info = self.ranged(
                         "yahoo",
                         code,
-                        today - timedelta(days=30),
+                        ref - timedelta(days=30),
                         today,
                         self.cfg.data.cache_ttl.prices_hours,
                         refresh,
                     )
                 except DataUnavailable as exc:
-                    log.warning("curve: %s unavailable (%s)", code, exc)
-                else:
-                    last = frame["close"].dropna()
-                    if not last.empty:
-                        rows.append(
-                            {
-                                "contract": code.removesuffix(inst.contract_suffix),
-                                "delivery": f"{y}-{m:02d}",
-                                "expiry": exp,
-                                "settle": float(last.iloc[-1]),
-                                "settle_date": last.index[-1].date(),
-                            }
-                        )
-                        infos.append(info)
+                    log.warning("curve: %s unavailable (%s); curve stops here", code, exc)
+                    break
+                known = frame["close"].loc[: pd.Timestamp(ref)].dropna()
+                if known.empty:
+                    break
+                rows.append(
+                    {
+                        "contract": code.removesuffix(inst.contract_suffix),
+                        "delivery": f"{y}-{m:02d}",
+                        "expiry": exp,
+                        "settle": float(known.iloc[-1]),
+                        "settle_date": known.index[-1].date(),
+                    }
+                )
+                infos.append(info)
             m += 1
             if m == 13:
                 y, m = y + 1, 1
         if len(rows) < 2:
-            raise DataUnavailable(f"{symbol}: fewer than 2 listed contracts found")
+            raise DataUnavailable(f"{symbol}: fewer than 2 contiguous contracts as of {ref}")
         return pd.DataFrame(rows), infos
 
     # --- fundamentals / positioning / macro ---------------------------------------------
@@ -298,6 +306,7 @@ class DataService:
         )
         frame = frame.copy()
         frame["available_at"] = [release_timestamp(d.date(), schedule) for d in frame.index]
+        frame = apply_overrides(frame, schedule_name, schedule, self.cfg.data.release_overrides)
         return frame, info
 
     def cot(
@@ -318,6 +327,7 @@ class DataService:
         )
         frame = frame.copy()
         frame["available_at"] = [release_timestamp(d.date(), schedule) for d in frame.index]
+        frame = apply_overrides(frame, "cftc_cot", schedule, self.cfg.data.release_overrides)
         return frame, info
 
     def fred(

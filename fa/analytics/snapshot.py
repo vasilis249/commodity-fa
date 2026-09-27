@@ -433,7 +433,7 @@ def _curve(
         notes.append("futures curve omitted: only the live curve is available (no history)")
         return None
     try:
-        curve, infos = svc.curve(symbol)
+        curve, infos = svc.curve(symbol, as_of=as_of)
     except DataUnavailable as exc:
         notes.append(f"futures curve unavailable: {exc}")
         return None

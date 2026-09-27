@@ -93,3 +93,28 @@ def test_next_day_availability() -> None:
     out = next_day_availability(first, 1, "America/New_York")
     assert out.iloc[0] == pd.Timestamp("2026-09-16 04:00", tz="UTC")  # EDT
     assert out.iloc[1] == pd.Timestamp("2026-11-03 05:00", tz="UTC")  # EST
+
+
+def test_shutdown_override_delays_cot(cfg: AppConfig) -> None:
+    from fa.data.pit import apply_overrides
+
+    cot = cfg.data.releases["cftc_cot"]
+    idx = pd.to_datetime(["2025-09-23", "2025-10-14", "2026-01-06"])
+    frame = pd.DataFrame({"mm_long": [1.0, 2.0, 3.0]}, index=idx)
+    frame["available_at"] = [release_timestamp(d.date(), cot) for d in idx]
+    out = apply_overrides(frame, "cftc_cot", cot, cfg.data.release_overrides)
+    assert out["available_at"].iloc[0] == frame["available_at"].iloc[0]  # before the shutdown
+    assert out["available_at"].iloc[1] == pd.Timestamp("2026-02-02 15:30", tz="America/New_York")
+    assert out["available_at"].iloc[2] == frame["available_at"].iloc[2]
+
+
+def test_override_must_be_late(config_copy) -> None:
+    import yaml
+
+    from fa.config import load_config
+
+    data = yaml.safe_load((config_copy / "data.yaml").read_text())
+    data["release_overrides"][0]["available_from"] = "2018-12-01"
+    (config_copy / "data.yaml").write_text(yaml.safe_dump(data))
+    with pytest.raises(Exception, match="available_from"):
+        load_config(config_copy)

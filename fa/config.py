@@ -6,7 +6,7 @@ Secrets are read by pydantic-settings and never printed or logged.
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import date, time
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
@@ -88,6 +88,26 @@ class ReleaseSchedule(_Strict):
     calendar: Literal["us_federal", "cme", "uk"]
 
 
+class ReleaseOverride(_Strict):
+    """Reports whose period falls in [period_start, period_end] were published late.
+
+    Used for publisher disruptions (e.g. government shutdowns). `available_from` must be
+    a conservative (late) bound: an early date leaks, a late one only loses freshness.
+    """
+
+    release: str
+    period_start: date
+    period_end: date
+    available_from: date
+    note: str
+
+    @model_validator(mode="after")
+    def _ordered(self) -> ReleaseOverride:
+        if not self.period_start <= self.period_end < self.available_from:
+            raise ValueError("need period_start <= period_end < available_from")
+        return self
+
+
 class RollSettings(_Strict):
     window_before: int = Field(ge=0)  # sessions before expiry in which a switch may happen
     window_after: int = Field(ge=0)
@@ -125,6 +145,7 @@ class DataConfig(_Strict):
     fred_macro: dict[str, str]
     fred_availability_lag_days: int = Field(ge=0)
     releases: dict[str, ReleaseSchedule]
+    release_overrides: list[ReleaseOverride] = Field(default_factory=list)
     eia_release_by_prefix: dict[str, str]
     rolls: RollSettings
     quality: QualitySettings
@@ -142,6 +163,9 @@ class DataConfig(_Strict):
             for sid in inst.eia_series.values():
                 if sid.split(".", 1)[0] not in self.eia_release_by_prefix:
                     raise ValueError(f"{inst.symbol}: no release schedule for EIA series {sid}")
+        for ov in self.release_overrides:
+            if ov.release not in self.releases:
+                raise ValueError(f"release_overrides: unknown release '{ov.release}'")
         if "cftc_cot" not in self.releases:
             raise ValueError("releases.cftc_cot is required")
         missing = REQUIRED_PROVIDERS - set(self.providers)

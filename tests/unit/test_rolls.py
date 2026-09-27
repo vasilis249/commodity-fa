@@ -9,6 +9,7 @@ import pytest
 from fa.config import AppConfig, RollRule
 from fa.data.rolls import (
     adjusted_returns,
+    calendar_roll_windows,
     contract_code,
     detect_rolls,
     expiries,
@@ -142,3 +143,22 @@ def test_etf_has_no_roll_masking(cfg: AppConfig) -> None:
     out, events = roll_adjust(frame, RollRule.NONE, "cme", cfg.data.rolls)
     assert events == []
     assert (out["mask_reason"] == "roll").sum() == 0
+
+
+def test_calendar_roll_windows_are_known_in_advance(cfg: AppConfig) -> None:
+    prices = load_yahoo_fixture("CL=F", "2026")
+    win = calendar_roll_windows(prices.index, RollRule.NYMEX_CL, "cme", cfg.data.rolls)
+    sep = win["2026-09-10":"2026-09-25"]
+    # CLV26 expires Tue 22 Sep: window = 4 sessions before .. 1 after
+    assert list(sep[sep].index.date) == [
+        date(2026, 9, 16),
+        date(2026, 9, 17),
+        date(2026, 9, 18),
+        date(2026, 9, 21),
+        date(2026, 9, 22),
+        date(2026, 9, 23),
+    ]
+    # causal: truncating the data never changes the mask on earlier sessions
+    cut = calendar_roll_windows(prices.index[:40], RollRule.NYMEX_CL, "cme", cfg.data.rolls)
+    pd.testing.assert_series_equal(cut, win.iloc[:40])
+    assert not calendar_roll_windows(prices.index, RollRule.NONE, "cme", cfg.data.rolls).any()

@@ -134,6 +134,20 @@ releases:
   eia_petroleum_weekly: {weekday: wednesday, release_time: "10:30", tz: America/New_York, calendar: us_federal}
   eia_gas_storage_weekly: {weekday: thursday, release_time: "10:30", tz: America/New_York, calendar: us_federal}
   cftc_cot: {weekday: friday, release_time: "15:30", tz: America/New_York, calendar: us_federal}
+# Late publication during government shutdowns (CFTC stopped publishing COT and caught
+# up afterwards; EIA kept publishing). Dates are deliberately LATE upper bounds: the
+# exact catch-up schedule was not verified, and a late bound only costs freshness.
+release_overrides:
+  - release: cftc_cot
+    period_start: 2018-12-25
+    period_end: 2019-01-29
+    available_from: 2019-03-11
+    note: "Dec 2018 - Jan 2019 shutdown; COT caught up by early March 2019"
+  - release: cftc_cot
+    period_start: 2025-09-30
+    period_end: 2025-12-30
+    available_from: 2026-02-02
+    note: "Oct - Nov 2025 shutdown; catch-up schedule unverified, conservative bound"
 eia_release_by_prefix:
   PET: eia_petroleum_weekly
   NG: eia_gas_storage_weekly

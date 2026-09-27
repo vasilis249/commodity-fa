@@ -35,6 +35,8 @@ class KeyedProvider:
 
     def fetch(self, key: str, start: date, end: date) -> pd.DataFrame:
         self.calls.append(key)
+        if key not in self.frames:  # like Yahoo for an unknown/expired contract
+            return pd.DataFrame(columns=["close"], index=pd.DatetimeIndex([], name="date"))
         return self.frames[key].loc[pd.Timestamp(start) : pd.Timestamp(end)]
 
 
@@ -76,8 +78,14 @@ def _curve_frames() -> dict[str, pd.DataFrame]:
         "CLH27": 82.46,
         "CLJ27": 81.12,
     }
-    idx = pd.DatetimeIndex([pd.Timestamp("2026-09-25")], name="date")
-    return {f"{k}.NYM": pd.DataFrame({"close": [v]}, index=idx) for k, v in settles.items()}
+    idx = pd.DatetimeIndex(pd.to_datetime(["2026-09-22", "2026-09-25"]), name="date")
+    # 22 Sep settles are 1.0 lower, so a leak of 25 Sep prices into a 22 Sep snapshot shows
+    frames = {
+        f"{k}.NYM": pd.DataFrame({"close": [v - 1.0, v]}, index=idx) for k, v in settles.items()
+    }
+    # CLV26 expires 22 Sep: the front month on that day only
+    frames["CLV26.NYM"] = pd.DataFrame({"close": [94.59]}, index=idx[:1])
+    return frames
 
 
 def _prices(cut: str | None = None) -> dict[str, pd.DataFrame]:
@@ -181,3 +189,21 @@ def test_cli_analyze_json_offline(config_copy: Path, tmp_path: Path) -> None:
     assert (
         res.exit_code == 0 and "TECHNICALS" in res.output and "Not investment advice" in res.output
     )
+
+
+def test_curve_as_of_uses_only_settles_known_then(cfg: AppConfig, tmp_path: Path) -> None:
+    """Audit finding: a 22 Sep snapshot used 25 Sep settlements."""
+    snap = build_snapshot(_service(cfg, tmp_path), "CL=F", as_of=date(2026, 9, 22))
+    assert snap.curve is not None
+    assert all(q.settle_date <= snap.as_of for q in snap.curve.contracts)
+    assert [q.contract for q in snap.curve.contracts[:2]] == ["CLV26", "CLX26"]
+    assert snap.curve.contracts[1].settle == pytest.approx(91.41)  # the 22 Sep settle
+
+
+def test_curve_stops_at_a_missing_front_month(cfg: AppConfig, tmp_path: Path) -> None:
+    svc = _service(cfg, tmp_path)
+    frames = svc._providers["yahoo"].frames  # type: ignore[attr-defined]
+    del frames["CLZ26.NYM"]
+    snap = build_snapshot(svc, "CL=F")
+    assert snap.curve is None  # only CLX26 is contiguous: never skip to CLF27
+    assert any("curve unavailable" in n for n in snap.notes)
