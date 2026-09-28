@@ -427,6 +427,15 @@ class Secrets(BaseSettings):
     eia_api_key: SecretStr | None = None
     fred_api_key: SecretStr | None = None
 
+    @field_validator("anthropic_api_key", "eia_api_key", "fred_api_key", mode="before")
+    @classmethod
+    def _blank_is_missing(cls, v: object) -> object:
+        """`KEY=` lines (as in .env.example) mean "not set", not an empty key."""
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
+
     def status(self) -> dict[str, bool]:
         """Which keys are set, without exposing any value."""
         return {name.upper(): getattr(self, name) is not None for name in type(self).model_fields}

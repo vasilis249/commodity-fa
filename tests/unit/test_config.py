@@ -100,3 +100,28 @@ def test_secret_status_never_exposes_values(monkeypatch: pytest.MonkeyPatch) -> 
     assert status["EIA_API_KEY"] is True
     assert "super-secret-value" not in repr(secrets)
     assert "super-secret-value" not in str(status)
+
+
+def test_blank_keys_in_env_file_count_as_missing(tmp_path, monkeypatch) -> None:
+    from fa.config import Secrets
+
+    for k in ("ANTHROPIC_API_KEY", "EIA_API_KEY", "FRED_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    env = tmp_path / ".env"
+    env.write_text(
+        "ANTHROPIC_API_KEY=\nEIA_API_KEY=abc123\nFRED_API_KEY=   \n"
+    )  # .env.example style
+    s = Secrets(_env_file=env)
+    assert s.status() == {"ANTHROPIC_API_KEY": False, "EIA_API_KEY": True, "FRED_API_KEY": False}
+
+
+def test_anthropic_client_gets_the_key_from_env_file(tmp_path, monkeypatch) -> None:
+    """The SDK reads only os.environ; a key kept in .env must still reach it."""
+    from fa.agents.base import AnthropicLLM
+    from fa.config import Secrets
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    env = tmp_path / ".env"
+    env.write_text("ANTHROPIC_API_KEY=sk-ant-from-dotenv\n")
+    monkeypatch.setattr("fa.config.Secrets.model_config", {**Secrets.model_config, "env_file": env})
+    assert AnthropicLLM().client.api_key == "sk-ant-from-dotenv"

@@ -45,7 +45,13 @@ class AnthropicLLM:
         if client is None:
             import anthropic
 
-            client = anthropic.Anthropic(max_retries=3)
+            from fa.config import load_secrets
+
+            # the SDK only reads the process environment; the key usually lives in .env
+            key = load_secrets().anthropic_api_key
+            client = anthropic.Anthropic(
+                api_key=key.get_secret_value() if key else None, max_retries=3
+            )
         self.client = client
 
     def create(self, agent: str, **params: Any) -> Any:
